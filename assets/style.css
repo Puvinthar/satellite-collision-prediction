@@ -671,3 +671,249 @@ body {
     background: linear-gradient(90deg, transparent, #00d4ff, transparent);
     animation: scan-line 2s linear infinite;
 }
+
+/* ===========================================================================
+   BATCH FLEET SURVEILLANCE — NEW COMPONENTS
+   =========================================================================== */
+
+/* --- Quick-Select Button Group --- */
+.quick-select-group {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.quick-btn {
+    flex: 1;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 10px !important;
+    letter-spacing: 0.5px;
+    padding: 3px 6px !important;
+    border-radius: 3px !important;
+    border: 1px solid #1a2a3a !important;
+    background: rgba(0, 212, 255, 0.06) !important;
+    color: #8899aa !important;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quick-btn:hover {
+    background: rgba(0, 212, 255, 0.15) !important;
+    border-color: #00d4ff55 !important;
+    color: #00d4ff !important;
+}
+
+.quick-btn-sat:hover {
+    background: rgba(0, 212, 255, 0.15) !important;
+    color: #00d4ff !important;
+}
+
+.quick-btn-deb:hover {
+    background: rgba(255, 107, 53, 0.15) !important;
+    border-color: #ff6b3555 !important;
+    color: #ff6b35 !important;
+}
+
+.quick-btn-clear:hover {
+    background: rgba(255, 0, 64, 0.1) !important;
+    border-color: #ff004033 !important;
+    color: #ff4444 !important;
+}
+
+/* --- Batch Summary Stats --- */
+.batch-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.batch-stat-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 6px;
+    background: rgba(0, 212, 255, 0.03);
+    border: 1px solid #0d1f3066;
+    border-radius: 3px;
+}
+
+.batch-stat-label {
+    font-size: 9px;
+    font-family: 'Share Tech Mono', monospace;
+    color: #556677;
+    letter-spacing: 0.5px;
+}
+
+.batch-stat-value {
+    font-size: 12px;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 600;
+}
+
+/* --- Placeholder Text --- */
+.placeholder-text {
+    font-size: 11px;
+    font-family: 'Share Tech Mono', monospace;
+    color: #334455;
+    text-align: center;
+    padding: 12px 8px;
+    letter-spacing: 0.5px;
+}
+
+/* --- Top Threats List --- */
+.threat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 4px;
+    border-bottom: 1px solid #0d1f3033;
+    transition: background 0.2s;
+}
+
+.threat-item:hover {
+    background: rgba(0, 212, 255, 0.04);
+}
+
+.threat-rank {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 24px;
+}
+
+.threat-pair-names {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    font-family: 'Share Tech Mono', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.threat-dist {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 65px;
+    text-align: right;
+}
+
+.threat-tag {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.5px;
+    min-width: 52px;
+    text-align: center;
+}
+
+/* --- Fleet Telemetry Compact Cards --- */
+.telem-compact-card {
+    background: rgba(10, 20, 35, 0.5);
+    border: 1px solid #0d1f3066;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    transition: border-color 0.2s;
+}
+
+.telem-compact-card:hover {
+    border-color: #00d4ff33;
+}
+
+.telem-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.telem-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.telem-obj-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    flex: 1;
+}
+
+.type-badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.5px;
+}
+
+.type-badge-sat {
+    background: rgba(0, 212, 255, 0.15);
+    color: #00d4ff;
+    border: 1px solid #00d4ff33;
+}
+
+.type-badge-deb {
+    background: rgba(255, 107, 53, 0.15);
+    color: #ff6b35;
+    border: 1px solid #ff6b3533;
+}
+
+.telem-card-body {
+    display: flex;
+    gap: 8px;
+}
+
+.telem-mini {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+}
+
+.telem-mini-label {
+    font-size: 9px;
+    font-family: 'Share Tech Mono', monospace;
+    color: #445566;
+}
+
+.telem-mini-value {
+    font-size: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    color: #8899aa;
+    font-weight: 600;
+}
+
+/* --- Multi-select Dropdown Enhancements --- */
+#fleet-select .Select-value {
+    font-size: 11px !important;
+}
+
+#fleet-select .Select-multi-value-wrapper {
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+/* --- Collision Matrix Graph Container --- */
+#collision-matrix-graph .js-plotly-plot {
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+/* --- Right Sidebar Fleet Telemetry Scroll --- */
+#fleet-telem-container {
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+#top-threats-container {
+    max-height: 200px;
+    overflow-y: auto;
+}

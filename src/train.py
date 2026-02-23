@@ -1,7 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from src.model import GatedPINN, physics_loss
+
+try:
+    from src.model import GatedPINN, physics_loss
+except ModuleNotFoundError:
+    from model import GatedPINN, physics_loss
 
 def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3):
     """
@@ -43,11 +47,8 @@ def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3):
             # If I put it in model.py, it's safer.
             # I will use the model's output as the gated correction.
             
-            # The model returns 6 values: dr (3), dv (3)
-            predictions = model(inputs, t)
-            
-            delta_r = predictions[:, :3]
-            delta_v = predictions[:, 3:]
+            # The model returns (delta_r, delta_v) tuple
+            delta_r, delta_v = model(inputs, t)
             
             # Corrected State
             # sgp4_pos is likely shape [Batch, 3], delta_r is [Batch, 3]

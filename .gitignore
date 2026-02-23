@@ -1,4 +1,4 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
@@ -7,7 +7,28 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
-*/.ipynb_checkpoints/*
-*.ipynb_checkpoints/*
-.virtual_documents
+.venv/
+
+# Jupyter
+*/.ipynb_checkpoints/
+*.ipynb_checkpoints/
+.virtual_documents/
+
+# Temp / backup files
+src/app_backup.py
+notebooks_temp/
+Untitled.ipynb
+debug_app.py
+
+# Data caches
+st_cache/
+*.csv.Zone.Identifier
+*:Zone.Identifier
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
