@@ -1744,17 +1744,13 @@ name = "project-epoch-zero"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "dash" },
-    { name = "dash-bootstrap-components" },
-    { name = "dash-iconify" },
-    { name = "dash-mantine-components" },
+    { name = "flask" },
     { name = "ipywidgets" },
     { name = "joblib" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "plotly" },
-    { name = "pybind11" },
-    { name = "pybind11-stubgen" },
+    { name = "requests" },
     { name = "scikit-learn" },
     { name = "seaborn" },
     { name = "sgp4" },
@@ -1774,10 +1770,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dash", specifier = ">=2.15.0" },
-    { name = "dash-bootstrap-components", specifier = ">=1.5.0" },
-    { name = "dash-iconify", specifier = ">=0.1.2" },
-    { name = "dash-mantine-components", specifier = "==0.12.1" },
+    { name = "flask", specifier = ">=3.0.0" },
     { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "joblib", specifier = ">=1.5.3" },
     { name = "matplotlib", specifier = ">=3.10.8" },
@@ -1785,9 +1778,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "plotly", specifier = ">=5.18.0" },
     { name = "plotly", specifier = ">=6.5.0" },
-    { name = "pybind11", specifier = "==3.0.2" },
-    { name = "pybind11-stubgen", specifier = "==2.5.5" },
-    { name = "scikit-learn", specifier = ">=1.4.0" },
+    { name = "requests", specifier = ">=2.31.0" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "sgp4", specifier = ">=2.25" },
@@ -2542,10 +2533,10 @@ dependencies = [
     { name = "torch" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:3e5ffa69606171c74f3e2b969785ead50b782ca657e746aaee1ee7cc88dcfc08" },
-    { url = "https://download.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:004ff6bcee0ac78747253c09db67d281add4308a9b87a7bf1769da5914998639" },
-    { url = "https://download.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp313-cp313-linux_x86_64.whl", hash = "sha256:1bc23963f447c910a0060b130b04b407d2ea218b2a553e674c829d5f17eb8c8e" },
-    { url = "https://download.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp313-cp313-win_amd64.whl", hash = "sha256:231eddbfd8bafd06b2c9f55cd6f33e61f58b25b19f2d51382a95e8f12887689f" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:3e5ffa69606171c74f3e2b969785ead50b782ca657e746aaee1ee7cc88dcfc08" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:004ff6bcee0ac78747253c09db67d281add4308a9b87a7bf1769da5914998639" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp313-cp313-linux_x86_64.whl", hash = "sha256:1bc23963f447c910a0060b130b04b407d2ea218b2a553e674c829d5f17eb8c8e" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchaudio-2.6.0%2Bcu124-cp313-cp313-win_amd64.whl", hash = "sha256:231eddbfd8bafd06b2c9f55cd6f33e61f58b25b19f2d51382a95e8f12887689f" },
 ]
 
 [[package]]

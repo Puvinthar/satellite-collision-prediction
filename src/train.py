@@ -1,16 +1,41 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from src.model import GatedPINN, physics_loss
+import logging
 
-def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3):
+logger = logging.getLogger(__name__)
+
+try:
+    from src.model import GatedPINN, physics_loss
+except ModuleNotFoundError:
+    from model import GatedPINN, physics_loss
+
+def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3, device=None):
     """
     Training loop for Project Zero GatedPINN.
+    
+    Parameters
+    ----------
+    model : GatedPINN
+        PINN model to train
+    dataloader : iterable
+        Training data loader
+    epochs : int
+        Number of training epochs
+    learning_rate : float
+        Adam optimizer learning rate
+    device : torch.device, optional
+        Device to train on (default: GPU if available, else CPU)
     """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss()
     
     model.train()
+    logger.info(f"Starting training: {epochs} epochs, lr={learning_rate}, device={device}")
     
     for epoch in range(epochs):
         total_epoch_loss = 0
@@ -43,11 +68,8 @@ def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3):
             # If I put it in model.py, it's safer.
             # I will use the model's output as the gated correction.
             
-            # The model returns 6 values: dr (3), dv (3)
-            predictions = model(inputs, t)
-            
-            delta_r = predictions[:, :3]
-            delta_v = predictions[:, 3:]
+            # The model returns (delta_r, delta_v) tuple
+            delta_r, delta_v = model(inputs, t)
             
             # Corrected State
             # sgp4_pos is likely shape [Batch, 3], delta_r is [Batch, 3]
