@@ -1,20 +1,41 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from src.model import GatedPINN, physics_loss
 except ModuleNotFoundError:
     from model import GatedPINN, physics_loss
 
-def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3):
+def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3, device=None):
     """
     Training loop for Project Zero GatedPINN.
+    
+    Parameters
+    ----------
+    model : GatedPINN
+        PINN model to train
+    dataloader : iterable
+        Training data loader
+    epochs : int
+        Number of training epochs
+    learning_rate : float
+        Adam optimizer learning rate
+    device : torch.device, optional
+        Device to train on (default: GPU if available, else CPU)
     """
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss()
     
     model.train()
+    logger.info(f"Starting training: {epochs} epochs, lr={learning_rate}, device={device}")
     
     for epoch in range(epochs):
         total_epoch_loss = 0
