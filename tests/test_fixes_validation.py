@@ -115,10 +115,11 @@ def test_deployer_shape_handling():
         
         deployer = OrbitDeployer()
         
-        # Create batch features (B=4, 9 features)
+        # Create batch features (B=4, 10 features)
         batch_size = 4
-        features = np.random.randn(batch_size, 9) * 0.1
+        features = np.random.randn(batch_size, 10) * 0.1
         features[:, 6:8] *= 1e-4  # bstar and ndot are small
+        features[:, 9] = 150.0  # f107 typical value
         
         # Test with different t_norm shapes
         test_cases = [

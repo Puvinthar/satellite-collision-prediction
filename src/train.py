@@ -1,3 +1,13 @@
+"""
+Training loop for GatedPINN v3.1.2.
+
+Matches the notebook v3.1.2 training configuration:
+- Optimizer: Adam(lr=0.002)
+- Scheduler: ReduceLROnPlateau(factor=0.5, patience=15)
+- Loss: MSELoss (pure data-driven, no physics loss)
+- Epochs: 300, Batch size: 256
+"""
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -6,129 +16,121 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from src.model import GatedPINN, physics_loss
+    from src.model import GatedPINN
 except ModuleNotFoundError:
-    from model import GatedPINN, physics_loss
+    from model import GatedPINN
 
-def train_pinn(model, dataloader, epochs=50, learning_rate=1e-3, device=None):
+# Training hyperparameters (matching notebook v3.1.2)
+EPOCHS = 300
+BATCH_SIZE = 256
+LR = 0.002
+
+
+def train_pinn(model, dataloader, epochs=EPOCHS, learning_rate=LR, device=None):
     """
-    Training loop for Project Zero GatedPINN.
-    
+    Training loop for Project Zero GatedPINN v3.1.2.
+
+    Matches the notebook training loop exactly:
+    - Pure MSE loss (no physics loss component)
+    - ReduceLROnPlateau scheduler (factor=0.5, patience=15)
+    - Adam optimizer
+
     Parameters
     ----------
     model : GatedPINN
         PINN model to train
     dataloader : iterable
-        Training data loader
+        DataLoader yielding (x, y, t) batches where:
+            x: [B, 10] scaled input features
+            y: [B, 6]  scaled target residuals
+            t: [B, 1]  normalized time (dt_minutes / 1440)
     epochs : int
-        Number of training epochs
+        Number of training epochs (default: 300)
     learning_rate : float
-        Adam optimizer learning rate
+        Adam optimizer learning rate (default: 0.002)
     device : torch.device, optional
         Device to train on (default: GPU if available, else CPU)
+
+    Returns
+    -------
+    model : GatedPINN
+        Trained model
     """
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = nn.MSELoss()
-    
-    model.train()
-    logger.info(f"Starting training: {epochs} epochs, lr={learning_rate}, device={device}")
-    
-    for epoch in range(epochs):
-        total_epoch_loss = 0
-        
-        for batch in dataloader:
-            # Unpack batch - assuming structure based on usage
-            # inputs: [Batch, 9] (features)
-            # t: [Batch, 1] (time query)
-            # sgp4_pos: [Batch, 3] (SGP4 baseline position)
-            # ground_truth_pos: [Batch, 3] (Actual position)
-            # bstar: [Batch, 1] (Drag coefficient)
-            inputs, t, sgp4_pos, sgp4_vel, ground_truth_pos, bstar = batch
-            
-            # Ensure t requires grad for physics loss (autograd)
-            t.requires_grad = True
-            
-            optimizer.zero_grad()
-            
-            # Forward Pass - Model returns correction * gate internally now?
-            # User snippet: delta_r, delta_v = model(inputs) -> apply gate manually?
-            # In model.py, we implemented: return out * gate
-            # So model(inputs, t) returns the GATED correction.
-            
-            # Wait, model.py signature is forward(x, t).
-            # The user snippet implies manual gating in the loop: "Apply the Physics Gate (tanh(5t))"
-            # But the model.py I modified DOES apply the gate inside forward.
-            # I should align them. If model applies it, I don't need to apply it again.
-            # However, user explicitly requested: "You must apply the tanh(5t) gate here..."
-            # AND I already put it in model.py.
-            # If I put it in model.py, it's safer.
-            # I will use the model's output as the gated correction.
-            
-            # The model returns (delta_r, delta_v) tuple
-            delta_r, delta_v = model(inputs, t)
-            
-            # Corrected State
-            # sgp4_pos is likely shape [Batch, 3], delta_r is [Batch, 3]
-            corrected_pos = sgp4_pos + delta_r
-            corrected_vel = sgp4_vel + delta_v
-            
-            # Physics Gate Note:
-            # Since check is inside model.forward(), delta_r is already 0 at t=0.
-            # So corrected_pos = sgp4_pos + 0 = sgp4_pos at t=0. Correct.
-            
-            # Calculate Compound Loss
-            # 1. Data Loss (MSE against Ground Truth)
-            l_data = criterion(corrected_pos, ground_truth_pos)
-            
-            # 2. Physics Loss (J2 + Drag Consistency)
-            # We need to pass 't' to physics_loss for autograd if we want d(vel)/dt
-            # But here 'corrected_vel' is what we want to differentiate w.r.t 't'.
-            # corrected_vel = sgp4_vel + delta_v.
-            # delta_v comes from model(inputs, t).
-            # So corrected_vel depends on 't'.
-            l_phys = physics_loss(corrected_pos, corrected_vel, t, bstar)
-            
-            # Weighted Sum
-            total_loss = l_data + 0.1 * l_phys
-            
-            total_loss.backward()
-            optimizer.step()
-            
-            total_epoch_loss += total_loss.item()
-            
-        print(f"Epoch {epoch+1}/{epochs} | Loss: {total_epoch_loss / len(dataloader):.6f}")
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=15
+    )
+    loss_fn = nn.MSELoss()
 
-    print("Training Complete.")
+    model.train()
+    logger.info(
+        f"Starting training: {epochs} epochs, lr={learning_rate}, device={device}"
+    )
+    logger.info(
+        f"Training on {len(dataloader.dataset)} samples | Batches: {len(dataloader)}"
+    )
+
+    loss_history = []
+
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+
+        for x, y, t in dataloader:
+            x, y, t = x.to(device), y.to(device), t.to(device)
+
+            # Forward: model returns [B, 6] gated correction
+            pred = model(x, t)
+            loss = loss_fn(pred, y)
+
+            # Backward
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            optimizer.step()
+
+            epoch_loss += loss.item()
+
+        avg_loss = epoch_loss / len(dataloader)
+        loss_history.append(avg_loss)
+
+        # Step scheduler based on average epoch loss
+        current_lr = optimizer.param_groups[0]["lr"]
+        scheduler.step(avg_loss)
+
+        if (epoch + 1) % 10 == 0 or epoch == 0:
+            logger.info(
+                f"Epoch {epoch + 1}/{epochs} | Loss: {avg_loss:.6f} | LR: {current_lr:.1e}"
+            )
+
+    logger.info("Training Complete.")
     return model
+
 
 if __name__ == "__main__":
     # Mock Data for standalone verification
+    from torch.utils.data import DataLoader, TensorDataset
+
     print("Running Training Loop Verification (Dry Run)...")
-    
-    # Mock Model
+
     model = GatedPINN()
-    
-    # Mock Batch: 
-    # inputs: [Batch, 9], t: [Batch, 1], sgp4_pos: [Batch, 3], ...
-    batch_size = 2
-    inputs = torch.randn(batch_size, 9)
-    t = torch.tensor([[0.1], [0.5]], requires_grad=True)
-    sgp4_pos = torch.randn(batch_size, 3)
-    sgp4_vel = torch.randn(batch_size, 3) # Added for complete state
-    ground_truth_pos = torch.randn(batch_size, 3)
-    bstar = torch.abs(torch.randn(batch_size, 1)) * 1e-4
-    
-    # Simple Dataloader-like list
-    mock_loader = [(inputs, t, sgp4_pos, sgp4_vel, ground_truth_pos, bstar)]
-    
+
+    # Mock batch: x=[B, 10], y=[B, 6], t=[B, 1]
+    batch_size = 8
+    x = torch.randn(batch_size, 10)
+    y = torch.randn(batch_size, 6)
+    t = torch.rand(batch_size, 1)
+
+    dataset = TensorDataset(x, y, t)
+    mock_loader = DataLoader(dataset, batch_size=4, shuffle=True)
+
     try:
         train_pinn(model, mock_loader, epochs=2)
         print("Dry Run Successful.")
     except Exception as e:
         print(f"Dry Run Failed: {e}")
         import traceback
+
         traceback.print_exc()

@@ -107,18 +107,46 @@
             
             <div class="globe-container" id="globe-container">
                 <div id="labels-container" class="labels-container"></div>
+                <!-- Compact HUD tiles -->
                 <div class="globe-hud">
-                    <div class="hud-item"><span class="hud-label">ACTIVE OBJECTS</span><span class="hud-value" id="hud-objects">0</span></div>
-                    <div class="hud-item"><span class="hud-label">SIM FRAME</span><span class="hud-value" id="hud-frame">0/0</span></div>
-                    <div class="hud-item"><span class="hud-label">ORBITAL EPOCH</span><span class="hud-value" id="hud-time">--:--:--</span></div>
+                    <div class="hud-tiles">
+                        <div class="hud-tile">
+                            <span class="hud-label">OBJECTS</span>
+                            <span class="hud-value hud-value-sm" id="hud-objects">0</span>
+                        </div>
+                        <div class="hud-tile">
+                            <span class="hud-label">SIM FRAME</span>
+                            <span class="hud-value hud-value-sm" id="hud-frame">0/0</span>
+                        </div>
+                    </div>
+                    <div class="hud-tile hud-tile-wide">
+                        <span class="hud-label">ORBITAL EPOCH</span>
+                        <span class="hud-value hud-value-epoch" id="hud-time">--:--:-- UTC</span>
+                    </div>
                     <div class="hud-status">LIVE SIMULATION MODE</div>
                 </div>
+
+                <!-- Satellite tracking panel (shown on click) -->
+                <div class="track-panel" id="track-panel" style="display:none;">
+                    <div class="track-header">🎯 TRACKING</div>
+                    <div class="track-name" id="track-label">---</div>
+                    <button class="btn-hud btn-hud-sm" onclick="untrackSatellite()">✕ UNTRACK</button>
+                </div>
+
+                <!-- Globe controls -->
                 <div class="globe-controls">
                     <button id="btn-play" onclick="togglePlay()" class="btn-hud">▶ PLAY</button>
                     <button id="btn-pause" onclick="pauseAnim()" class="btn-hud">⏸ PAUSE</button>
                     <button id="btn-reset-cam" onclick="resetCamera()" class="btn-hud">↺ RESET VIEW</button>
                 </div>
                 
+                <!-- Timeline scrubber -->
+                <div class="timeline-bar">
+                    <label class="timeline-title" for="timeline-scrubber">⏱ TIMELINE</label>
+                    <input type="range" min="0" max="600" value="0" step="1" id="timeline-scrubber" title="Scrub through the orbit timeline">
+                    <span class="timeline-label" id="timeline-label">T+0.0 min</span>
+                </div>
+
                 <div class="speed-control">
                     <label for="speed-slider">WARP SPEED</label>
                     <input type="range" min="1" max="10" value="3" id="speed-slider" title="Adjust animation speed multiplier">

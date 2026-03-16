@@ -1744,12 +1744,18 @@ name = "project-epoch-zero"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "dash" },
+    { name = "dash-bootstrap-components" },
+    { name = "dash-iconify" },
+    { name = "dash-mantine-components" },
     { name = "flask" },
     { name = "ipywidgets" },
     { name = "joblib" },
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "plotly" },
+    { name = "pybind11" },
+    { name = "pybind11-stubgen" },
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "seaborn" },
@@ -1770,6 +1776,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dash", specifier = ">=2.15.0" },
+    { name = "dash-bootstrap-components", specifier = ">=1.5.0" },
+    { name = "dash-iconify", specifier = ">=0.1.2" },
+    { name = "dash-mantine-components", specifier = "==0.12.1" },
     { name = "flask", specifier = ">=3.0.0" },
     { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "joblib", specifier = ">=1.5.3" },
@@ -1778,7 +1788,10 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "plotly", specifier = ">=5.18.0" },
     { name = "plotly", specifier = ">=6.5.0" },
+    { name = "pybind11", specifier = "==3.0.2" },
+    { name = "pybind11-stubgen", specifier = "==2.5.5" },
     { name = "requests", specifier = ">=2.31.0" },
+    { name = "scikit-learn", specifier = ">=1.4.0" },
     { name = "scikit-learn", specifier = ">=1.8.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "sgp4", specifier = ">=2.25" },
@@ -2562,10 +2575,10 @@ dependencies = [
     { name = "torch" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:efb53ea0af7bf09b7b53e2a18b9be6d245f7d46a90b51d5cf97f37e9b929a991" },
-    { url = "https://download.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:ec63c2ee792757492da40590e34b14f2fceda29050558c215f0c1f3b08149c0f" },
-    { url = "https://download.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp313-cp313-linux_x86_64.whl", hash = "sha256:4b70acf3b4b96a0ceb1374116626c9bef9e8be016b57b1284e482260ca1896d6" },
-    { url = "https://download.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp313-cp313-win_amd64.whl", hash = "sha256:8fcf55321b206de70ff8e01c884fa42e57a60b1cb749341b96e0f22c8a7c9ec7" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:efb53ea0af7bf09b7b53e2a18b9be6d245f7d46a90b51d5cf97f37e9b929a991" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:ec63c2ee792757492da40590e34b14f2fceda29050558c215f0c1f3b08149c0f" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp313-cp313-linux_x86_64.whl", hash = "sha256:4b70acf3b4b96a0ceb1374116626c9bef9e8be016b57b1284e482260ca1896d6" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchvision-0.21.0%2Bcu124-cp313-cp313-win_amd64.whl", hash = "sha256:8fcf55321b206de70ff8e01c884fa42e57a60b1cb749341b96e0f22c8a7c9ec7" },
 ]
 
 [[package]]

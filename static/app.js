@@ -19,6 +19,8 @@ let animPlaying = false;
 let animSpeed = 3;
 let catalog = [];
 let defaultIds = [];
+let trackedSat = null;       // currently tracked satellite mesh
+let raycaster, mouse;        // for click detection
 
 const EARTH_RADIUS = 1.0;  // normalized
 const SCALE_FACTOR = 1.0;  // trajectory data already normalized by R_EARTH in server
@@ -48,6 +50,16 @@ async function init() {
         speedSlider.addEventListener('input', (e) => {
             animSpeed = parseInt(e.target.value);
             if (speedLabel) speedLabel.textContent = animSpeed + 'x';
+        });
+    }
+
+    // Timeline scrubber
+    const timelineScrubber = document.getElementById('timeline-scrubber');
+    if (timelineScrubber) {
+        timelineScrubber.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            animFrame = val;
+            updateTimelineLabel(val);
         });
     }
 
@@ -201,6 +213,13 @@ function initThreeJS() {
     controls.maxDistance = 15;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.3;
+
+    // Raycaster for satellite click detection
+    raycaster = new THREE.Raycaster();
+    raycaster.params.Points = { threshold: 0.05 };
+    mouse = new THREE.Vector2();
+    renderer.domElement.addEventListener('click', onSatelliteClick);
+    renderer.domElement.addEventListener('dblclick', () => { untrackSatellite(); });
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0x334466, 0.6);
@@ -475,16 +494,16 @@ function populateScene(data) {
 
         // Trajectory Trails
         if (obj.trajectory_pinn_eci && obj.trajectory_pinn_eci.length > 1) {
-            // PINN Corrected (Active Path)
+            // PINN Corrected (Active Path) - closed orbit loop
             const points = obj.trajectory_pinn_eci.map(p => new THREE.Vector3(p[0], p[2], -p[1]));
             const lineMat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.4 });
-            orbitGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMat));
+            orbitGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), lineMat));
 
-            // SGP4 Physics (Phantom Path)
+            // SGP4 Physics (Phantom Path) - closed orbit loop
             if (obj.trajectory_sgp4_eci) {
                 const pSgp4 = obj.trajectory_sgp4_eci.map(p => new THREE.Vector3(p[0], p[2], -p[1]));
                 const sgp4Mat = new THREE.LineDashedMaterial({ color: 0x888888, dashSize: 0.02, gapSize: 0.01, transparent: true, opacity: 0.2 });
-                const sgp4Line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pSgp4), sgp4Mat);
+                const sgp4Line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pSgp4), sgp4Mat);
                 sgp4Line.computeLineDistances();
                 sgp4Group.add(sgp4Line);
             }
@@ -500,6 +519,16 @@ function populateScene(data) {
     animPlaying = true;
     const btnPlay = document.getElementById('btn-play');
     if (btnPlay) btnPlay.classList.add('active');
+
+    // Setup timeline scrubber range
+    const timelineScrubber = document.getElementById('timeline-scrubber');
+    if (timelineScrubber) {
+        const firstObj = Object.values(data.objects)[0];
+        const maxFrame = (firstObj && firstObj.trajectory_pinn_eci) ? firstObj.trajectory_pinn_eci.length - 1 : 600;
+        timelineScrubber.max = maxFrame;
+        timelineScrubber.value = 0;
+    }
+    updateTimelineLabel(0);
 }
 
 window.addCustomSatellite = async function() {
@@ -563,21 +592,26 @@ function animate() {
     if (sgp4Group && toggleSgp4) sgp4Group.visible = toggleSgp4.checked;
 
     if (animPlaying && scanData && scanData.objects) {
-        const totalFrames = 600;
-        animFrame = (animFrame + animSpeed * 0.1) % totalFrames;
+        // Determine total frames from actual trajectory data
+        const firstObj = Object.values(scanData.objects)[0];
+        const totalFrames = (firstObj && firstObj.trajectory_pinn_eci) ? firstObj.trajectory_pinn_eci.length : (scanData.total_frames || 600);
+        // Warp speed: multiplier directly controls frame step
+        // Reduced from 0.5 to 0.02 to make 1x look close to live speed
+        animFrame = (animFrame + animSpeed * 0.02) % totalFrames;
         const f = Math.floor(animFrame);
         
+        // Update HUD frame
+        const orbitPct = ((f / totalFrames) * 100).toFixed(0);
         const hudFrame = document.getElementById('hud-frame');
-        if (hudFrame) hudFrame.textContent = `${f + 1}/${totalFrames}`;
+        if (hudFrame) hudFrame.textContent = `${f + 1}/${totalFrames} (${orbitPct}%)`;
         
-        // Update live epoch text (IST)
-        const now = new Date();
-        const futureTime = new Date(now.getTime() + f * 30000 + (5.5 * 60 * 60 * 1000)); // IST offset
-        const istHours = String(futureTime.getUTCHours()).padStart(2, '0');
-        const istMinutes = String(futureTime.getUTCMinutes()).padStart(2, '0');
-        const istSeconds = String(futureTime.getUTCSeconds()).padStart(2, '0');
-        const hudTime = document.getElementById('hud-time');
-        if (hudTime) hudTime.textContent = `${istHours}:${istMinutes}:${istSeconds} IST`;
+        // Update orbital epoch with full date+time from server target_epoch
+        updateEpochDisplay(f, totalFrames);
+
+        // Update timeline scrubber position
+        const timelineScrubber = document.getElementById('timeline-scrubber');
+        if (timelineScrubber) timelineScrubber.value = f;
+        updateTimelineLabel(f);
 
         satelliteGroup.children.forEach(child => {
             if (child.userData.trajectory) {
@@ -585,6 +619,15 @@ function animate() {
                 child.position.set(p[0], p[2], -p[1]);
             }
         });
+
+        // Camera tracking: smoothly follow the tracked satellite
+        if (trackedSat && trackedSat.userData.trajectory) {
+            const satPos = trackedSat.position.clone();
+            const offset = satPos.clone().normalize().multiplyScalar(0.5);
+            const targetCamPos = satPos.clone().add(offset);
+            camera.position.lerp(targetCamPos, 0.05);
+            controls.target.lerp(satPos, 0.08);
+        }
 
         // Dynamic distance lines
         while (dynamicLineGroup.children.length > 0) {
@@ -623,6 +666,88 @@ function animate() {
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
 }
+
+// =========================================================================
+// EPOCH & TIMELINE HELPERS
+// =========================================================================
+function updateEpochDisplay(frame, totalFrames) {
+    const hudTime = document.getElementById('hud-time');
+    if (!hudTime) return;
+
+    if (scanData && scanData.start_epoch) {
+        // Simulation starts at NOW (start_epoch), covers prop_window minutes
+        const startDate = new Date(scanData.start_epoch);
+        const propWin = scanData.prop_window || 100;
+        const msPerFrame = (propWin * 60 * 1000) / totalFrames;
+        const simDate = new Date(startDate.getTime() + frame * msPerFrame);
+        const yr = simDate.getUTCFullYear();
+        const mo = String(simDate.getUTCMonth() + 1).padStart(2, '0');
+        const dy = String(simDate.getUTCDate()).padStart(2, '0');
+        const hh = String(simDate.getUTCHours()).padStart(2, '0');
+        const mm = String(simDate.getUTCMinutes()).padStart(2, '0');
+        const ss = String(simDate.getUTCSeconds()).padStart(2, '0');
+        hudTime.textContent = `${yr}-${mo}-${dy} ${hh}:${mm}:${ss} UTC`;
+    } else {
+        const now = new Date();
+        hudTime.textContent = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+    }
+}
+
+function updateTimelineLabel(frame) {
+    const label = document.getElementById('timeline-label');
+    if (!label || !scanData) return;
+    const firstObj = Object.values(scanData.objects || {})[0];
+    const totalFrames = (firstObj && firstObj.trajectory_pinn_eci) ? firstObj.trajectory_pinn_eci.length : 600;
+    const propWin = scanData.prop_window || 100;
+    const minutesElapsed = ((frame / totalFrames) * propWin).toFixed(1);
+    label.textContent = `T+${minutesElapsed} min`;
+}
+
+// =========================================================================
+// SATELLITE CLICK TRACKING
+// =========================================================================
+function onSatelliteClick(event) {
+    if (!satelliteGroup || satelliteGroup.children.length === 0) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(satelliteGroup.children, false);
+    if (intersects.length > 0) {
+        const sat = intersects[0].object;
+        trackSatellite(sat);
+    }
+}
+
+function trackSatellite(sat) {
+    // Unhighlight previous
+    if (trackedSat) {
+        trackedSat.material.emissiveIntensity = 0.6;
+        trackedSat.scale.set(1, 1, 1);
+    }
+    trackedSat = sat;
+    trackedSat.material.emissiveIntensity = 1.2;
+    trackedSat.scale.set(1.8, 1.8, 1.8);
+    controls.autoRotate = false;
+    addLog('TRK', `Tracking: ${sat.userData.name || sat.userData.oid}`);
+    // Update tracking HUD
+    const trackLabel = document.getElementById('track-label');
+    if (trackLabel) trackLabel.textContent = sat.userData.name || sat.userData.oid;
+    const trackPanel = document.getElementById('track-panel');
+    if (trackPanel) trackPanel.style.display = 'block';
+}
+
+window.untrackSatellite = function() {
+    if (trackedSat) {
+        trackedSat.material.emissiveIntensity = 0.6;
+        trackedSat.scale.set(1, 1, 1);
+        addLog('TRK', `Untracked: ${trackedSat.userData.name || trackedSat.userData.oid}`);
+        trackedSat = null;
+    }
+    controls.autoRotate = true;
+    const trackPanel = document.getElementById('track-panel');
+    if (trackPanel) trackPanel.style.display = 'none';
+};
 
 // =========================================================================
 // API CALLS
@@ -790,12 +915,13 @@ function updateRightPanel(data) {
     if (threatsBody) threatsBody.innerHTML = threatsHtml || '<div class="placeholder">No pairs.</div>';
 
     // Telemetry
-    let telemHtml = '<table class="telem-table"><thead><tr><th>Object</th><th>ALT (km)</th><th>SPD (km/s)</th><th>Δr (km)</th></tr></thead><tbody>';
+    let telemHtml = '<table class="telem-table"><thead><tr><th>Object</th><th>ALT (km)</th><th>SPD (km/s)</th><th>Δr (km)</th><th>TLE Epoch</th></tr></thead><tbody>';
     let hasData = false;
     Object.values(data.objects).forEach(obj => {
         hasData = true;
         const tagCls = obj.type === 'PAYLOAD' ? 'tag-sat' : 'tag-deb';
         const tag = obj.type === 'PAYLOAD' ? 'SAT' : 'DEB';
+        const tleEpoch = obj.tle_epoch || '---';
         telemHtml += `<tr>
             <td>
                 <div class="telem-name-cell">
@@ -807,6 +933,7 @@ function updateRightPanel(data) {
             <td>${obj.altitude.toFixed(0)}</td>
             <td>${obj.speed.toFixed(3)}</td>
             <td>${obj.dr.toFixed(2)}</td>
+            <td class="tle-epoch-cell">${tleEpoch}</td>
         </tr>`;
     });
     telemHtml += '</tbody></table>';
@@ -855,6 +982,7 @@ window.pauseAnim = function () {
 };
 
 window.resetCamera = function () {
+    if (trackedSat) untrackSatellite();
     camera.position.set(0, 0.8, 3.2);
     controls.target.set(0, 0, 0);
     controls.update();
@@ -866,7 +994,7 @@ window.resetCamera = function () {
 function addLog(tag, msg) {
     const logEl = document.getElementById('event-log');
     if (!logEl) return;
-    const tagClass = { SYS: 'log-sys', CMD: 'log-cmd', OK: 'log-ok', ERR: 'log-err', TCA: 'log-tca', NET: 'log-cmd' }[tag] || 'log-sys';
+    const tagClass = { SYS: 'log-sys', CMD: 'log-cmd', OK: 'log-ok', ERR: 'log-err', TCA: 'log-tca', TRK: 'log-tca', NET: 'log-cmd' }[tag] || 'log-sys';
     const entry = document.createElement('div');
     entry.className = 'log-entry';
     entry.innerHTML = `<span class="log-tag ${tagClass}">${tag}</span><span class="log-msg">${msg}</span>`;

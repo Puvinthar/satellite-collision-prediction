@@ -3,6 +3,7 @@ import numpy as np
 import random
 from datetime import datetime, timezone
 
+
 def set_seed(seed=42):
     """
     Set seeds for reproducibility.
@@ -14,11 +15,20 @@ def set_seed(seed=42):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-# Physical constants
-R_EARTH = 6378.137      # km
-MU_EARTH = 398600.4418  # km^3/s^2
 
-R_EARTH_KM = 6371.0
+# Physical constants (matching notebook v3.1.2)
+MU_EARTH = 398600.4418  # km^3/s^2
+R_EARTH = 6378.137  # km (equatorial radius)
+J2 = 1.08263e-3  # J2 perturbation coefficient
+OMEGA_E = 7.2921159e-5  # rad/s (Earth rotation rate)
+
+# Normalization references
+R_REF = 6378.137  # km
+V_REF = 7.905  # km/s
+T_REF = 1440.0  # minutes (24h)
+ACC_REF = V_REF / (T_REF * 60.0)  # km/s^2
+
+R_EARTH_KM = 6371.0  # km (mean radius, used for LLA)
 
 
 def eci_to_lla(x, y, z, dt_utc=None):
