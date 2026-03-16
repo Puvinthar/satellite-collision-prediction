@@ -5,30 +5,63 @@ build/
 dist/
 wheels/
 *.egg-info
+.pyc
+.pyo
 
 # Virtual environments
 .venv/
+venv/
+env/
 
-# Jupyter
+# Jupyter & Notebooks
 */.ipynb_checkpoints/
 *.ipynb_checkpoints/
 .virtual_documents/
+.ipynb_checkpoints
 
 # Temp / backup files
 src/app_backup.py
-notebooks_temp/
 Untitled.ipynb
 debug_app.py
+main.py
 
-# Data caches
+# Model files (large LLM/ML models)
+*.pth
+*.pt
+*.h5
+*.onnx
+
+# Data directories & caches
+notebooks_temp/
 st_cache/
+st_cache_*/
+data/
 *.csv.Zone.Identifier
 *:Zone.Identifier
+*.csv
 
-# OS
+# Environment & Dependencies
+.env
+.env.local
+uv.lock
+
+# OS files
 Thumbs.db
 .DS_Store
+*.swp
+*.swo
+*~
 
-# IDE
+# IDE & Editor
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+logs/
+
+# Build outputs
+dist/
+build/
