@@ -8,8 +8,14 @@ SGP4 pipeline can predict *future* positions from *today's* data.
 import requests
 import time
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+try:
+    from spacetrack import SpaceTrackClient
+except ImportError:
+    SpaceTrackClient = None
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -73,7 +79,7 @@ def fetch_tle(norad_id: str | int, timeout: float = 15.0, max_retries: int = 2) 
                 if attempt < max_retries:
                     time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
                     continue
-                return None
+                break
 
             # CelesTrak returns: Name (line 0), TLE Line 1, TLE Line 2
             if len(lines) >= 3 and not lines[0].startswith("1 "):
@@ -91,7 +97,7 @@ def fetch_tle(norad_id: str | int, timeout: float = 15.0, max_retries: int = 2) 
                 if attempt < max_retries:
                     time.sleep(0.5 * (2 ** attempt))
                     continue
-                return None
+                break
 
             # Extract epoch from TLE line 1  (cols 18-32: YYDDD.DDDDDDDD)
             epoch_str = _tle_epoch_to_utc(tle1)
@@ -112,16 +118,25 @@ def fetch_tle(norad_id: str | int, timeout: float = 15.0, max_retries: int = 2) 
             if attempt < max_retries:
                 time.sleep(0.5 * (2 ** attempt))
                 continue
-            return None
+            break
         except requests.ConnectionError as e:
             logger.warning(f"[TLE] Connection error for NORAD {norad_id}: {e} (attempt {attempt + 1}/{max_retries + 1})")
             if attempt < max_retries:
                 time.sleep(0.5 * (2 ** attempt))
                 continue
-            return None
+            break
         except requests.RequestException as e:
             logger.error(f"[TLE] Request error for NORAD {norad_id}: {e}")
-            return None
+            break
+
+    # If we reached here, CelesTrak failed. Try fallback.
+    logger.warning(f"[TLE] CelesTrak failed for NORAD {norad_id}. Attempting SpaceTrack fallback...")
+    fallback_res = fetch_tle_spacetrack(norad_id)
+    if fallback_res:
+        _tle_cache[norad_id] = fallback_res
+        return fallback_res
+        
+    return None
 
 
 def fetch_batch(norad_ids: list[str | int], timeout: float = 15.0) -> dict:
@@ -145,6 +160,53 @@ def _tle_epoch_to_utc(tle1: str) -> str:
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return "unknown"
+
+
+def fetch_tle_spacetrack(norad_id: str | int) -> Optional[dict]:
+    """Fallback fetcher using SpaceTrack API."""
+    norad_id = str(norad_id).strip()
+    username = os.environ.get("SPACETRACK_USERNAME")
+    password = os.environ.get("SPACETRACK_PASSWORD")
+    
+    if not username or not password or SpaceTrackClient is None:
+        logger.warning(f"[TLE-Fallback] Missing credentials or spacetrack library for {norad_id}")
+        return None
+        
+    try:
+        logger.debug(f"[TLE-Fallback] Attempting SpaceTrack API for NORAD {norad_id}")
+        st = SpaceTrackClient(identity=username, password=password)
+        data = st.gp(
+            norad_cat_id=norad_id,
+            orderby='EPOCH desc',
+            limit=1,
+            format='json'
+        )
+        if not data or len(data) == 0:
+            logger.warning(f"[TLE-Fallback] No data found for NORAD {norad_id}")
+            return None
+            
+        sat_data = data[0]
+        name = sat_data.get('OBJECT_NAME', f"NORAD-{norad_id}")
+        tle1 = sat_data.get('TLE_LINE1')
+        tle2 = sat_data.get('TLE_LINE2')
+        
+        if not tle1 or not tle2:
+            return None
+            
+        epoch_str = _tle_epoch_to_utc(tle1)
+        
+        result = {
+            "tle1": tle1,
+            "tle2": tle2,
+            "name": name,
+            "epoch_str": epoch_str,
+            "fetched_at": time.time()
+        }
+        logger.info(f"[TLE-Fallback] Successfully fetched NORAD {norad_id} from SpaceTrack: {name}")
+        return result
+    except Exception as e:
+        logger.error(f"[TLE-Fallback] Error fetching NORAD {norad_id} from SpaceTrack: {e}")
+        return None
 
 
 def is_tle_fresh(tle_dict: dict, max_age_days: float = 7.0) -> bool:

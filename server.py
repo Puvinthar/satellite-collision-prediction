@@ -269,6 +269,11 @@ def api_scan():
     # Use max(user_prop_window, delta_min)
     effective_window = max(prop_window, delta_min)
 
+    # Dynamic steps calculation (prevent trajectory threading)
+    # Target ~1 point per degree of orbit (e.g., 360 points per 90-min orbit)
+    # Min 600, Max 6000
+    dynamic_steps = int(max(600, min(6000, (effective_window / 90.0) * 360)))
+
     logger.info(
         f"Scan started: {len(selected_ids)} objects, target={target_dt.strftime('%Y-%m-%d %H:%M:%S')}, window={effective_window:.1f}m (now->target: {delta_min:.1f}m)"
     )
@@ -323,7 +328,7 @@ def api_scan():
                         tle1,
                         tle2,
                         target_dt.strftime("%Y-%m-%d %H:%M:%S"),
-                        steps=600,
+                        steps=dynamic_steps,
                         window_minutes=effective_window,
                     )
                 )
@@ -612,4 +617,4 @@ if __name__ == "__main__":
     print(f"  EPOCH ZERO — Fleet Surveillance System (Three.js UI)")
     print(f"  Open http://localhost:5000")
     print(f"{'=' * 60}\n")
-    app.run(debug=True, port=5000, host="0.0.0.0", use_reloader=True)
+    app.run(debug=True, port=3000, host="0.0.0.0", use_reloader=True)

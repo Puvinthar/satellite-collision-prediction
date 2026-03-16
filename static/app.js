@@ -492,18 +492,23 @@ function populateScene(data) {
         const label = new CSS2DObject(labelDiv);
         marker.add(label);
 
-        // Trajectory Trails
+        // Trajectory Trails (Rendered as rails via CatmullRomCurve3 for smoothness)
         if (obj.trajectory_pinn_eci && obj.trajectory_pinn_eci.length > 1) {
-            // PINN Corrected (Active Path) - closed orbit loop
+            // PINN Corrected (Active Path)
             const points = obj.trajectory_pinn_eci.map(p => new THREE.Vector3(p[0], p[2], -p[1]));
+            const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
+            // Oversample by 4x for smooth rail rendering (min 2000 points)
+            const renderPoints = curve.getPoints(Math.max(points.length * 4, 2000));
             const lineMat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.4 });
-            orbitGroup.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), lineMat));
+            orbitGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(renderPoints), lineMat));
 
-            // SGP4 Physics (Phantom Path) - closed orbit loop
+            // SGP4 Physics (Phantom Path)
             if (obj.trajectory_sgp4_eci) {
                 const pSgp4 = obj.trajectory_sgp4_eci.map(p => new THREE.Vector3(p[0], p[2], -p[1]));
+                const curveSgp4 = new THREE.CatmullRomCurve3(pSgp4, false, 'catmullrom', 0.5);
+                const renderSgp4 = curveSgp4.getPoints(Math.max(pSgp4.length * 4, 2000));
                 const sgp4Mat = new THREE.LineDashedMaterial({ color: 0x888888, dashSize: 0.02, gapSize: 0.01, transparent: true, opacity: 0.2 });
-                const sgp4Line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pSgp4), sgp4Mat);
+                const sgp4Line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(renderSgp4), sgp4Mat);
                 sgp4Line.computeLineDistances();
                 sgp4Group.add(sgp4Line);
             }
