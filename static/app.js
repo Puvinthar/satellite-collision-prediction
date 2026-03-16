@@ -498,18 +498,33 @@ function populateScene(data) {
             const points = obj.trajectory_pinn_eci.map(p => new THREE.Vector3(p[0], p[2], -p[1]));
             const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.5);
             // Oversample by 4x for smooth rail rendering (min 2000 points)
-            const renderPoints = curve.getPoints(Math.max(points.length * 4, 2000));
+            const numRenderPoints = Math.max(points.length * 4, 2000);
+            const renderPoints = curve.getPoints(numRenderPoints);
             const lineMat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.4 });
-            orbitGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(renderPoints), lineMat));
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints(renderPoints);
+            const orbitLine = new THREE.Line(lineGeometry, lineMat);
+            orbitLine.userData = { 
+                origLength: points.length, 
+                renderLength: renderPoints.length,
+                renderPointsPerOrbit: Math.floor(480 * (renderPoints.length / points.length))
+            };
+            orbitGroup.add(orbitLine);
 
             // SGP4 Physics (Phantom Path)
             if (obj.trajectory_sgp4_eci) {
                 const pSgp4 = obj.trajectory_sgp4_eci.map(p => new THREE.Vector3(p[0], p[2], -p[1]));
                 const curveSgp4 = new THREE.CatmullRomCurve3(pSgp4, false, 'catmullrom', 0.5);
-                const renderSgp4 = curveSgp4.getPoints(Math.max(pSgp4.length * 4, 2000));
+                const numSgp4RenderPoints = Math.max(pSgp4.length * 4, 2000);
+                const renderSgp4 = curveSgp4.getPoints(numSgp4RenderPoints);
                 const sgp4Mat = new THREE.LineDashedMaterial({ color: 0x888888, dashSize: 0.02, gapSize: 0.01, transparent: true, opacity: 0.2 });
-                const sgp4Line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(renderSgp4), sgp4Mat);
+                const sgp4Geometry = new THREE.BufferGeometry().setFromPoints(renderSgp4);
+                const sgp4Line = new THREE.Line(sgp4Geometry, sgp4Mat);
                 sgp4Line.computeLineDistances();
+                sgp4Line.userData = { 
+                    origLength: pSgp4.length, 
+                    renderLength: renderSgp4.length,
+                    renderPointsPerOrbit: Math.floor(480 * (renderSgp4.length / pSgp4.length))
+                };
                 sgp4Group.add(sgp4Line);
             }
         }
@@ -624,6 +639,22 @@ function animate() {
                 child.position.set(p[0], p[2], -p[1]);
             }
         });
+
+        // Update dynamic draw range for orbit trails to prevent spaghetti overlapping
+        const updateDrawRange = (line) => {
+            if (line.userData && line.userData.origLength) {
+                const renderRatio = line.userData.renderLength / line.userData.origLength;
+                const currentRenderFrame = Math.floor(animFrame * renderRatio);
+                // Draw roughly half an orbit behind and half ahead
+                const halfOrbit = Math.floor(line.userData.renderPointsPerOrbit / 2);
+                const start = Math.max(0, currentRenderFrame - halfOrbit);
+                const targetEnd = currentRenderFrame + halfOrbit;
+                const count = Math.min(targetEnd - start, line.userData.renderLength - start);
+                line.geometry.setDrawRange(start, count);
+            }
+        };
+        orbitGroup.children.forEach(updateDrawRange);
+        sgp4Group.children.forEach(updateDrawRange);
 
         // Camera tracking: smoothly follow the tracked satellite
         if (trackedSat && trackedSat.userData.trajectory) {

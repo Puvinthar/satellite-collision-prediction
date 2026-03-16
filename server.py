@@ -18,7 +18,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Ensure src is importable
-sys.path.insert(0, os.path.dirname(__file__))
+try:
+    if os.path.dirname(__file__) not in sys.path:
+        sys.path.insert(0, os.path.dirname(__file__))
+except NameError:
+    pass
 
 from src.utils import eci_to_lla, eci_trajectory_to_lla
 
@@ -614,7 +618,7 @@ def add_sat():
 
 if __name__ == "__main__":
     print(f"\n{'=' * 60}")
-    print(f"  EPOCH ZERO — Fleet Surveillance System (Three.js UI)")
-    print(f"  Open http://localhost:5000")
+    print("  EPOCH ZERO — Fleet Surveillance System (Three.js UI)")
+    print("  Open http://localhost:3000")
     print(f"{'=' * 60}\n")
-    app.run(debug=True, port=3000, host="0.0.0.0", use_reloader=True)
+    app.run(debug=True, port=5000, host="0.0.0.0", use_reloader=True)
