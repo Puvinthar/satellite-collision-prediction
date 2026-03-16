@@ -1,0 +1,19 @@
+\section{Introduction}
+
+\subsection{The Kessler Challenge and STM}
+The proliferation of mega-constellations and the exponentially increasing volume of orbital debris in Low Earth Orbit (LEO) have triggered an unprecedented demand for high-accuracy Space Traffic Management (STM). Collision avoidance, conjunction data messages (CDMs), and orbital safety rely heavily on the accuracy of ephemeris data, most commonly distributed via Two-Line Elements (TLEs) maintained by the United States Space Surveillance Network (SSN). TLEs are inherently coupled with the Simplified General Perturbations-4 (SGP4) analytical propagator. While SGP4 is computationally efficient and perfectly suited for tracking tens of thousands of objects simultaneously, its analytical formulations rely on static drag models and secular gravitational perturbations, which degrade rapidly under dynamic space weather conditions.
+
+\subsection{The Impact of Geomagnetic Storms}
+During severe geomagnetic storms and high solar flux events (measured by F10.7 and planetary $K_p$ indices), extreme ultraviolet (EUV) radiation heats the Earth's thermosphere. This heating causes the atmosphere to expand outward, drastically increasing the atmospheric density encountered by LEO satellites. SGP4 models atmospheric drag primarily through the $B^*$ drag term, a pseudo-ballistic coefficient assumed to be constant between TLE updates. When a solar storm hits, the true ballistic interaction diverges from the SGP4 assumptions by orders of magnitude. This divergence leads to catastrophic in-track positioning errors, frequently exceeding 20 to 50 kilometers within a 24-hour prediction window. Consequently, STM systems miss critical conjunction warnings, and the operators endure an unacceptable increase in ''Search Volume'' to re-acquire lost assets post-storm.
+
+\subsection{The Machine Learning Gap}
+In recent years, the astrodynamics community has attempted to bridge the SGP4 accuracy gap using Deep Learning (DL). Approaches ranging from simple Feed-Forward Neural Networks to Long Short-Term Memory (LSTM) networks have been deployed to learn the residuals between SGP4 predictions and High-Precision Orbit Propagator (HPOP) ground truths. However, a systemic issue plagues purely data-driven models: ''Kinematic Inconsistency.'' Standard residual networks learn bias terms that inadvertently predict non-zero positional errors at time $t=0$ (the TLE epoch). This causes the algorithm to effectively ''teleport'' the satellite to a new location instantly, violating the fundamental laws of physics and making the models inherently untrustworthy for critical operational use.
+
+\subsection{Our Contribution: The Gated PINN}
+To resolve the catastrophic failures of both SGP4 in storm environments and pure ML approaches in baseline physics, we propose the Gated Physics-Informed Neural Network (G-PINN). This study makes the following core contributions:
+\begin{itemize}
+    \item \textbf{The Physics Gate:} We introduce a differentiable gating mechanism that acts as a hard constraint on the network's output, forcing it to exactly respect the baseline SGP4 physics at $t=0$, eliminating phantom drift entirely.
+    \item \textbf{Space Weather Integration:} We seamlessly fuse historical orbital features with dynamic F10.7 and $K_p$ indices to enable AI ''precognition'' of drag states.
+    \item \textbf{Autonomous Bias Discovery:} We demonstrate the network's ability to act as an anomaly detection tool, successfully identifying a hidden 5.5 m/s velocity bias within the SSN's SGP4 TLE modeling for Starlink-3321.
+    \item \textbf{Operational Conjunction Framework:} We extend the G-PINN into a full Monte Carlo Conjunction Assessor, providing sub-kilometer Mahalanobis risk metrics and an ultra-high-fidelity 3D visualization suite for visual collision risk assessment.
+\end{itemize}

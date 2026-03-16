@@ -1,0 +1,17 @@
+\section{Conclusion and Future Work}
+
+\subsection{Conclusion}
+This research fundamentally demonstrates that the decades-old SGP4 propagator can be effectively modernized to survive severe geomagnetic storms without discarding its immense computational efficiency. By proposing the Gated Physics-Informed Neural Network (G-PINN), we solved the critical "initial state bias" problem that has historically prevented the adoption of deep learning in operational astrodynamics. The introduction of the $\tanh(5.0 \cdot t)$ Physics Gate guarantees that the model respects the baseline TLE epoch exactly, doing zero harm at $t=0$, while deploying highly complex, learned non-linear drag corrections over a 24-hour prediction window.
+
+Evaluated on a massive, real-world dataset of Starlink trajectories from 2022 to 2025, our V3.1.2 architecture successfully fused kinematic state vectors with live F10.7 solar flux indices. The results were conclusive: the G-PINN achieved a substantial $12.6\%$ reduction in absolute mean positional error during massive solar storms. More crucially, it completely truncated the extreme upper-variance outlier predictions of SGP4, compressing the potential "search volume" required to find lost assets by over 7 kilometers. The secondary discovery of an autonomous 5.5 m/s velocity bias correction further highlights the model's capacity to serve as an intelligent diagnostic layer for poor-quality SSN TLE data.
+
+Finally, integrating the G-PINN into an operational framework—complete with Mahalanobis-based Monte Carlo covariance simulations and an advanced \texttt{Three.js} 3D visualization suite—proves that AI-augmented space traffic management is not merely theoretical, but actively deployable today.
+
+\subsection{Future Work}
+Future iterations of this project will focus on the following vectors:
+\begin{itemize}
+    \item \textbf{Constellation-Wide Scaling:} While this model was localized to specific Starlink assets, the ultimate goal is to train a universal Graph Neural Network (GNN) that shares learned drag coefficients dynamically across an entire constellation based on geometric proximity in LEO.
+    \item \textbf{Live Telemetry Ingestion:} Replacing delayed SSN TLEs with live, high-cadence GPS telemetry directly downlinked from active satellite buses to create an ultra-low latency PINN forecaster.
+    \item \textbf{Predictive Space Weather:} Rather than reacting to current F10.7 and $K_p$ indices, future inputs will include Deep Learning-based forecasts of coronal mass ejections (CMEs), allowing the G-PINN to pre-emptively shift orbital trajectories before the storm impacts the thermosphere.
+\end{itemize}
+

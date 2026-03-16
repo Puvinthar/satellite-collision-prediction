@@ -1,0 +1,82 @@
+\ProvidesPackage{customfr}[2025/08/16 Custom formatting]
+
+
+
+
+% Paragraphs
+\parindent 1em
+\parskip 0pt plus 1pt
+% Abstract spanning
+\renewenvironment{abstract}{\centerline{\Large\bf
+Abstract}\vspace{0.5ex}\begin{quote}}{\par\end{quote}\vskip 1ex}
+
+% Sections with less space
+\def\section{\@startsection{section}{1}{\z@}{-10pt plus
+    -3pt minus -2pt}{4pt plus 2pt minus 1pt}{\Large\bf\raggedright}}
+\def\subsection{\@startsection{subsection}{2}{\z@}{-8pt plus
+    -2pt minus -2pt}{3pt plus 2pt minus 1pt}{\large\bf\raggedright}}
+\def\subsubsection{\@startsection{subsubsection}{3}{\z@}{-6pt plus
+   -2pt minus -1pt}{1pt plus 1pt minus 1pt}{\normalsize\bf\raggedright}}
+\renewcommand\paragraph{\@startsection{paragraph}{4}{\z@}{-4pt plus
+   -2pt minus -1pt}{-1em}{\normalsize\bf}}
+\setcounter{secnumdepth}{2} % Don't number subsubsections
+
+% Footnotes
+\footnotesep 6.65pt \skip\footins 9pt plus 4pt minus 2pt
+\def\footnoterule{\kern-3pt \hrule width 5pc \kern 2.6pt }
+\setcounter{footnote}{0}
+
+% Illustrations (floats)
+\floatsep 12pt plus 2pt minus 2pt
+\textfloatsep 16pt plus 2pt minus 4pt
+\intextsep 12pt plus 2pt minus 2pt
+\dblfloatsep 12pt plus 2pt minus 2pt
+\dbltextfloatsep 18pt plus 2pt minus 4pt
+
+% Displays
+\abovedisplayskip 7pt plus2pt minus5pt%
+\belowdisplayskip \abovedisplayskip
+\abovedisplayshortskip  0pt plus3pt%   
+\belowdisplayshortskip  4pt plus3pt minus3pt%
+
+% Lists
+\leftmargini 2em
+\leftmarginii 2em
+\leftmarginiii 1em 
+\leftmarginiv 0.5em
+\leftmarginv 0.5em 
+\leftmarginvi 0.5em
+
+\leftmargin\leftmargini
+\labelsep 5pt
+\labelwidth\leftmargini\advance\labelwidth-\labelsep
+
+\def\@listI{\leftmargin\leftmargini 
+\parsep 2pt plus 1pt minus 0.5pt%
+\topsep 4pt plus 1pt minus 2pt%
+\itemsep 2pt plus 1pt minus 0.5pt%
+\partopsep 1pt plus 0.5pt minus 0.5pt}
+
+\let\@listi\@listI
+\@listi 
+
+\def\@listii{\leftmargin\leftmarginii
+   \labelwidth\leftmarginii\advance\labelwidth-\labelsep
+   \parsep 1pt plus 0.5pt minus 0.5pt
+   \topsep 2pt plus 1pt minus 0.5pt
+   \itemsep \parsep}
+\def\@listiii{\leftmargin\leftmarginiii
+    \labelwidth\leftmarginiii\advance\labelwidth-\labelsep
+    \parsep 0pt plus 1pt
+    \partopsep 0.5pt plus 0pt minus 0.5pt
+    \topsep 1pt plus 0.5pt minus 0.5pt 
+    \itemsep \topsep}
+\def\@listiv{\leftmargin\leftmarginiv
+     \labelwidth\leftmarginiv\advance\labelwidth-\labelsep}
+\def\@listv{\leftmargin\leftmarginv
+     \labelwidth\leftmarginv\advance\labelwidth-\labelsep}
+\def\@listvi{\leftmargin\leftmarginvi
+     \labelwidth\leftmarginvi\advance\labelwidth-\labelsep}
+
+% We're never going to need a table of contents, so just flush it to
+%\def\addcontentsline#1#2#3{}

@@ -1,0 +1,34 @@
+\section{Operational Reality: The Hybrid Deployer}
+
+\subsection{The Mixture-of-Experts (MoE) Architecture}
+Transitioning this model from a theoretical notebook to an operational Space Operations Center (SpOC) requires strict fail-safes. The neural network must never degrade baseline predictions during nominal space weather conditions. To achieve this, we developed a rule-based Hybrid Mixture-of-Experts (\texttt{HybridDeployer}).
+
+The Deployer loads two distinct G-PINN models:
+\begin{enumerate}
+    \item \textbf{Quiet Expert:} Trained exclusively on non-storm data (9 input features, excluding F10.7 to prevent overfitting to noisy minor solar variations).
+    \item \textbf{Storm Expert:} Trained to handle massive drag variations (10 input features, including F10.7 and high $K_p$ data vectors).
+\end{enumerate}
+
+\subsection{Algorithmic Routing}
+The system constantly polls live space weather APIs. Let the live observed solar flux be $F_{\text{live}}$. The SpOC defines a critical threshold, $F_{\text{thresh}} = 120.0$.
+\begin{algorithm}[H]
+\caption{Hybrid SpOC Routing}
+\begin{algorithmic}[1]
+\REQUIRE $TLE_1$, $TLE_2$, $t_{target}$
+\STATE $F_{live} \leftarrow \text{Fetch Celestrak API}$
+\STATE $[\mathbf{r}, \mathbf{v}] \leftarrow \text{SGP4}(TLE, t_{target})$
+\IF{$F_{live} < F_{\text{thresh}}$}
+    \STATE $\mathcal{M} \leftarrow \text{Quiet Expert G-PINN}$
+    \STATE $\mathbf{x}_{feat} \leftarrow [\mathbf{r}, \mathbf{v}, B^*, \dot{n}, \Delta t]$
+\ELSE
+    \STATE $\mathcal{M} \leftarrow \text{Storm Expert G-PINN}$
+    \STATE $\mathbf{x}_{feat} \leftarrow[\mathbf{r}, \mathbf{v}, B^*, \dot{n}, \Delta t, F_{live}]$
+    \STATE $\text{ALERT:} \text{ Storm protocol activated}$
+\ENDIF
+\STATE $\hat{\mathbf{y}}_{corr} \leftarrow \mathcal{M}(\mathbf{x}_{feat}) \cdot \tanh(5 \cdot \Delta t_{norm})$
+\STATE $\mathbf{r}_{final} \leftarrow \mathbf{r} + \hat{\mathbf{y}}_{corr}$
+\RETURN $\mathbf{r}_{final}$
+\end{algorithmic}
+\end{algorithm}
+
+This hard-coded bifurcation guarantees mathematical safety. The Quiet Expert relies purely on local state-vector kinematics, respecting the SGP4 baseline. When extreme weather hits, the Storm Expert is triggered, aggressively pulling the satellite back along-track to compensate for unmodeled thermospheric drag.

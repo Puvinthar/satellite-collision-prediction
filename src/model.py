@@ -4,22 +4,16 @@ import torch.nn as nn
 class GatedPINN(nn.Module):
     def __init__(self):
         super().__init__()
-        # Input: 9 Features (rx, ry, rz, vx, vy, vz, bstar, ndot, dt)
         self.net = nn.Sequential(
-            nn.Linear(9, 128), nn.Tanh(),
+            nn.Linear(10, 128), nn.Tanh(),
             nn.Linear(128, 256), nn.Tanh(),
             nn.Linear(256, 128), nn.Tanh(),
-            nn.Linear(128, 6) # Output: Correction (dr, dv)
+            nn.Linear(128, 6)
         )
 
     def forward(self, x, t):
-        # x shape: [Batch, 9] (Scaled features)
-        # t shape: [Batch, 1] (Normalized time)
         out = self.net(x)
-        
-        # Physics Gate: Forces Correction=0 at t=0
-        # tanh(5*t) rises quickly, "opening" the gate within ~1-2 hours
-        gate = torch.tanh(5.0 * t) 
+        gate = torch.tanh(5.0 * t) # Soft Physics Gate (0 at t=0)
         return out * gate
 
 # --- Physics Constants ---

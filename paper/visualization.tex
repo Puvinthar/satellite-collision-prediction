@@ -1,0 +1,24 @@
+\section{Visualization and Analytical Framework}
+
+\subsection{Interactive 3D WebGL Visualization Suite}
+A key challenge in advanced Space Traffic Management is the human-in-the-loop interpretability of probabilistic collision data. Raw tensors and covariance matrices do not readily convey the tactical urgency of a conjunction event. To bridge the gap between our G-PINN mathematical engine and operational decision-making, we developed a massive, bespoke 3D visualization suite utilizing \texttt{Three.js} via Python-HTML injection.
+
+The visualization engine comprises several ascending tiers of complexity, denoted internally as \textit{NasaEyesUltimate}, \textit{NasaEyesSupreme}, and \textit{NasaEyesCinematicOptions}.
+The pipeline operates as follows:
+\begin{enumerate}
+    \item \textbf{Trajectory Generation:} The G-PINN forecaster preemptively computes 600-800 state vectors across a defined temporal window (e.g., $T_{-100}$ to $T_{+100}$ minutes) for both the primary asset and the intruder.
+    \item \textbf{Coordinate Transformation:} Standard SGP4 utilizes a Z-up Earth-Centered Inertial (ECI) coordinate frame. The WebGL standard relies on a Y-up system. We perform a real-time affine mapping transformation: $x \rightarrow x$, $z \rightarrow y$, $y \rightarrow -z$ to ensure visual congruence with standard 3D game engines.
+    \item \textbf{Data Injection:} The Python backend dumps the fully corrected, massive array of 3D positional coordinates as a JSON string directly into a dynamically generated HTML template containing embedded JavaScript.
+    \item \textbf{Interactive Rendering:} The injected HTML utilizes \texttt{Three.js} to render the Earth, orbital rails, dynamic trailing dust, relative coordinate shifts, and real-time Heads-Up Displays (HUDs) of relative distance and Mahalanobis risk.
+\end{enumerate}
+
+\subsection{Dynamic Follow-Camera Logic}
+To accurately represent a conjunction that occurs at orbital velocities ($>7$ km/s), absolute static camera views are practically useless. The engine employs a dynamic chase-cam lock:
+\begin{equation}
+    \text{Sat}_B^{relative} = \text{Pos}_B - \text{Pos}_A
+\end{equation}
+The camera is anchored to the primary satellite (Sat A) at coordinates $(0,0,0)$. The entire universe---including the Earth model, the background starfield, and the intruder satellite (Sat B)---is dynamically shifted relative to Sat A. This provides operators with a visceral, "cockpit-style" view of the impending collision geometry.
+
+\subsection{Shadow Projections and Mahalanobis Confidence}
+Beyond raw trajectory rendering, the visualizer projects the 3D Monte Carlo covariance clouds into 2D shadows onto the $X, Y,$ and $Z$ limiting bounding planes. By rendering 10,000 parallel particle states colored by risk density (Red for Threat, Blue for Primary), the visualizer provides an immediate heuristic of whether the primary asset's SGP4 covariance ellipsoid intersects the intruder's, effectively communicating complex Mahalanobis derivations into simple visual risk geometries.
+
