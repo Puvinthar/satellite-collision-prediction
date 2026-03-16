@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPOCH ZERO | Fleet Surveillance System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+    <!-- ======== HEADER ======== -->
+    <header class="header">
+        <div class="header-brand">
+            <svg viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="11" stroke="#3b82f6" stroke-width="1.5"/><circle cx="14" cy="14" r="5" fill="#3b82f6" opacity="0.3"/><ellipse cx="14" cy="14" rx="18" ry="7" stroke="#60a5fa" stroke-width="0.8" opacity="0.5" transform="rotate(-25 14 14)"/><circle cx="22" cy="10" r="2" fill="#60a5fa"/></svg>
+            <span class="brand-epoch">EPOCH</span>
+            <span class="brand-zero">ZERO</span>
+        </div>
+        <div class="header-status">
+            <div class="status-pill"><span class="status-dot dot-green"></span> SYS NOMINAL</div>
+            <div class="status-pill"><span class="status-dot dot-blue" id="pinn-dot"></span> <span id="pinn-label">PINN LOADING</span></div>
+            <div class="status-pill"><span class="status-dot dot-purple"></span> FLEET MODE</div>
+            <div class="status-pill" id="clock-pill">⏱ --:--:-- UTC</div>
+        </div>
+        <div class="header-right">
+            <div class="sys-label">Fleet Surveillance System</div>
+            <div class="sys-version">v5.0 · Three.js + PINN OPS</div>
+        </div>
+    </header>
+
+    <!-- ======== MAIN BODY ======== -->
+    <div class="main-body">
+
+        <!-- ======== LEFT PANEL ======== -->
+        <aside class="panel panel-left" id="left-panel">
+            <div class="section section-flex-grow">
+                <div class="section-header"><span class="section-icon">🛰️</span><span class="section-title">Fleet Selection</span></div>
+                <div class="section-body section-body-flex-col">
+                    <div class="fleet-list" id="fleet-list"><!-- populated by JS --></div>
+                    <div class="btn-row btn-row-no-shrink">
+                        <button class="btn-sm" onclick="selectAll()">ALL</button>
+                        <button class="btn-sm" onclick="selectSats()">SATS</button>
+                        <button class="btn-sm" onclick="selectDebris()">DEBRIS</button>
+                        <button class="btn-sm" onclick="selectNone()">CLEAR</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section section-no-shrink">
+                <div class="section-header"><span class="section-icon">📡</span><span class="section-title">Live TLE Data</span></div>
+                <div class="section-body">
+                    <button class="btn-secondary" onclick="fetchTLEs()" id="btn-fetch">⬆ Fetch Live TLEs</button>
+                    <div class="tle-source-container">
+                        <span class="form-label">TLE Source:</span>
+                        <span id="tle-source" class="tle-source-label">AWAITING LIVE FETCH</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section section-no-shrink">
+                <div class="section-header"><span class="section-icon">⏱️</span><span class="section-title">Prediction Window</span></div>
+                <div class="section-body">
+                    <label class="form-label" for="target-date">Target Date</label>
+                    <input type="date" class="form-input" id="target-date" title="Select target date for prediction">
+                    <label class="form-label label-margin-top" for="target-time">Target Time (UTC)</label>
+                    <input type="text" class="form-input" id="target-time" value="12:00:00" placeholder="HH:MM:SS" title="Enter target time in HH:MM:SS format">
+                    <label class="form-label label-margin-top" for="prop-window">Propagation Window</label>
+                    <div class="slider-container">
+                        <input type="range" min="30" max="180" step="10" value="100" id="prop-window" title="Set propagation window in minutes">
+                        <span class="slider-label" id="prop-label">100 min</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section section-no-shrink">
+                <div class="section-header"><span class="section-icon">🎯</span><span class="section-title">Manual Target Lock</span></div>
+                <div class="section-body">
+                    <div class="custom-target-row">
+                        <input type="text" id="custom-norad" placeholder="NORAD ID (e.g. 25544)" class="form-input" title="Enter NORAD catalog ID to add custom satellite">
+                        <button class="btn-secondary" onclick="addCustomSatellite()" id="btn-add-sat" title="Add satellite by NORAD ID">Lock Target</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section section-no-shrink">
+                <div class="section-header"><span class="section-icon">🔭</span><span class="section-title">Visual Controls</span></div>
+                <div class="section-body">
+                    <div class="layer-item"><input type="checkbox" id="toggle-orbits" checked title="Toggle orbit trajectories display"> <label for="toggle-orbits">Orbit Trajectories</label></div>
+                    <div class="layer-item"><input type="checkbox" id="toggle-sgp4" title="Toggle SGP4 physics path display"> <label for="toggle-sgp4">SGP4 Physics Path</label></div>
+                    <div class="layer-item"><input type="checkbox" id="toggle-conjunctions" checked title="Toggle conjunction lines display"> <label for="toggle-conjunctions">Conjunction Lines</label></div>
+                    <div class="layer-item"><input type="checkbox" id="toggle-labels" checked title="Toggle object labels display"> <label for="toggle-labels">Object Labels</label></div>
+                    <div class="layer-item"><input type="checkbox" id="toggle-stars" checked title="Toggle star field display"> <label for="toggle-stars">Star Field</label></div>
+                    <div class="layer-item"><input type="checkbox" id="toggle-atmosphere" checked title="Toggle atmosphere glow display"> <label for="toggle-atmosphere">Atmosphere Glow</label></div>
+                    <div class="layer-item"><input type="checkbox" id="toggle-debris" checked title="Toggle debris cloud display"> <label for="toggle-debris">Debris Cloud (LEO Threat)</label></div>
+                </div>
+            </div>
+
+            <div class="btn-scan-container">
+                <button class="btn-primary" id="btn-scan" onclick="runScan()">
+                    ⚡ EXECUTE BATCH SCAN
+                </button>
+            </div>
+        </aside>
+
+        <!-- ======== CENTER COLUMN (GLOBE + BOTTOM PANEL) ======== -->
+        <div class="center-column">
+            
+            <div class="globe-container" id="globe-container">
+                <div id="labels-container" class="labels-container"></div>
+                <div class="globe-hud">
+                    <div class="hud-item"><span class="hud-label">ACTIVE OBJECTS</span><span class="hud-value" id="hud-objects">0</span></div>
+                    <div class="hud-item"><span class="hud-label">SIM FRAME</span><span class="hud-value" id="hud-frame">0/0</span></div>
+                    <div class="hud-item"><span class="hud-label">ORBITAL EPOCH</span><span class="hud-value" id="hud-time">--:--:--</span></div>
+                    <div class="hud-status">LIVE SIMULATION MODE</div>
+                </div>
+                <div class="globe-controls">
+                    <button id="btn-play" onclick="togglePlay()" class="btn-hud">▶ PLAY</button>
+                    <button id="btn-pause" onclick="pauseAnim()" class="btn-hud">⏸ PAUSE</button>
+                    <button id="btn-reset-cam" onclick="resetCamera()" class="btn-hud">↺ RESET VIEW</button>
+                </div>
+                
+                <div class="speed-control">
+                    <label for="speed-slider">WARP SPEED</label>
+                    <input type="range" min="1" max="10" value="3" id="speed-slider" title="Adjust animation speed multiplier">
+                    <span id="speed-label">3x</span>
+                </div>
+            </div>
+
+            <div class="panel panel-bottom" id="bottom-panel">
+                <div class="section section-full-height">
+                    <div class="section-header"><span class="section-icon">📊</span><span class="section-title">Collision Risk Matrix (Heatmap)</span></div>
+                    <div class="section-body section-body-scrollable" id="risk-table-body">
+                        <div class="placeholder placeholder-padding">Select 2+ objects and scan to generate matrix.</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ======== RIGHT PANEL ======== -->
+        <aside class="panel panel-right" id="right-panel">
+            <div class="section section-no-shrink">
+                <div class="section-header"><span class="section-icon">🛡️</span><span class="section-title">Fleet Status</span></div>
+                <div class="section-body" id="fleet-status-body">
+                    <div class="placeholder">STANDBY — Run a batch scan</div>
+                </div>
+            </div>
+
+            <div class="section section-flex-1-2">
+                <div class="section-header"><span class="section-icon">⚠️</span><span class="section-title">Top Threats</span></div>
+                <div class="section-body section-body-scrollable" id="threats-body">
+                    <div class="placeholder">No data — run a batch scan.</div>
+                </div>
+            </div>
+
+            <div class="section section-flex-2">
+                <div class="section-header"><span class="section-icon">📡</span><span class="section-title">Fleet Telemetry</span></div>
+                <div class="section-body section-body-scrollable" id="telemetry-body">
+                    <div class="placeholder placeholder-padding">No data — run a batch scan.</div>
+                </div>
+            </div>
+
+            <div class="section section-flex-1">
+                <div class="section-header"><span class="section-icon">📋</span><span class="section-title">Event Log</span></div>
+                <div class="section-body section-body-scrollable">
+                    <div class="event-log" id="event-log" class="event-log-padding">
+                        <div class="log-entry"><span class="log-tag log-sys">SYS</span><span class="log-msg">Fleet Surveillance initialized. Select objects and scan.</span></div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- ======== FOOTER ======== -->
+    <footer class="footer">
+        <div>ℹ EPOCH ZERO v5.0 · PINN-Enhanced Fleet Conjunction Analysis + Live TLE</div>
+        <div class="footer-right">
+            <span>MODEL: </span><span id="footer-model" class="footer-model-label">ResidualPINN v3.3</span>
+            <span> · MODE: </span><span class="footer-mode-label">BATCH FLEET</span>
+            <span> · ENGINE: </span><span class="footer-engine-label">SGP4 + J2/Drag</span>
+            <span> · PROPAGATOR: </span><span class="footer-propagator-label">ACTIVE</span>
+        </div>
+    </footer>
+
+</div>
+
+<!-- Polyfill importmap for Safari iOS < 16.4 -->
+<script async src="https://cdn.jsdelivr.net/npm/es-module-shims@1/dist/es-module-shims.js"></script>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

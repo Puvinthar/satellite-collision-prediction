@@ -21,13 +21,8 @@ dependencies = [
     "joblib>=1.5.3",
     "seaborn>=0.13.2",
     "ipywidgets>=8.1.8",
-    "dash>=2.15.0",
-    "dash-bootstrap-components>=1.5.0",
-    "dash-mantine-components==0.12.1",
-    "dash-iconify>=0.1.2",
-    "pandas>=2.2.0",
-    "plotly>=5.18.0",
-    "scikit-learn>=1.4.0",
+    "requests>=2.31.0",
+    "flask>=3.0.0",
 ]
 
 [[tool.uv.index]]

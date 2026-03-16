@@ -1,13 +1,67 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
+.pyc
+.pyo
 
 # Virtual environments
-.venv
-*/.ipynb_checkpoints/*
-*.ipynb_checkpoints/*
-.virtual_documents
+.venv/
+venv/
+env/
+
+# Jupyter & Notebooks
+*/.ipynb_checkpoints/
+*.ipynb_checkpoints/
+.virtual_documents/
+.ipynb_checkpoints
+
+# Temp / backup files
+src/app_backup.py
+Untitled.ipynb
+debug_app.py
+main.py
+
+# Model files (large LLM/ML models)
+*.pth
+*.pt
+*.h5
+*.onnx
+
+# Data directories & caches
+notebooks_temp/
+st_cache/
+st_cache_*/
+data/
+*.csv.Zone.Identifier
+*:Zone.Identifier
+*.csv
+
+# Environment & Dependencies
+.env
+.env.local
+uv.lock
+
+# OS files
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE & Editor
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+logs/
+
+# Build outputs
+dist/
+build/
