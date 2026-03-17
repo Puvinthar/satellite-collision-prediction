@@ -12,6 +12,7 @@ import os
 import logging
 import joblib
 import requests
+import time
 from sgp4.api import Satrec, WGS72
 
 logger = logging.getLogger(__name__)
@@ -77,32 +78,57 @@ def get_latest_f107():
     return 150.0
 
 
+_f107_cache = {
+    "data": None,
+    "fetched_at": 0
+}
+CACHE_TTL = 3600  # 1 hour
+
 def get_f107_for_date(target_date_str):
     """
     Get F10.7 value for a specific target date from the 45-day forecast.
-
-    Falls back to get_latest_f107() if forecast is unavailable.
+    Caches the forecast JSON for 1 hour to avoid redundant requests.
     """
-    try:
-        url = "https://services.swpc.noaa.gov/json/45-day-forecast.json"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-
-        target_date = target_date_str[:10]  # Extract YYYY-MM-DD
-
-        for entry in data.get("data", []):
+    global _f107_cache
+    
+    target_date = target_date_str[:10]  # Extract YYYY-MM-DD
+    
+    # Check cache
+    now = time.time()
+    if _f107_cache["data"] and (now - _f107_cache["fetched_at"]) < CACHE_TTL:
+        # Use cached data
+        for entry in _f107_cache["data"].get("data", []):
             if entry.get("metric") == "f107":
                 entry_date = entry.get("time", "")[:10]
                 if entry_date == target_date:
                     val = float(entry.get("value", 0))
                     if val > 0:
-                        logger.info(
-                            f"[F10.7] Matched forecast for {target_date}: {val} sfu"
-                        )
+                        logger.debug(f"[F10.7] Cache HIT for {target_date}: {val} sfu")
                         return val
-    except Exception as e:
-        logger.warning(f"[F10.7] Failed to get forecast for {target_date_str}: {e}")
+        logger.debug(f"[F10.7] Cache HIT but no forecast for {target_date}")
+    else:
+        # Fetch fresh data
+        try:
+            logger.info("[F10.7] Cache MISS/STALE, fetching fresh 45-day forecast...")
+            url = "https://services.swpc.noaa.gov/json/45-day-forecast.json"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Update cache
+            _f107_cache["data"] = data
+            _f107_cache["fetched_at"] = now
+            
+            for entry in data.get("data", []):
+                if entry.get("metric") == "f107":
+                    entry_date = entry.get("time", "")[:10]
+                    if entry_date == target_date:
+                        val = float(entry.get("value", 0))
+                        if val > 0:
+                            logger.info(f"[F10.7] Fetched and matched forecast for {target_date}: {val} sfu")
+                            return val
+        except Exception as e:
+            logger.warning(f"[F10.7] Failed to get forecast for {target_date_str}: {e}")
 
     return get_latest_f107()
 

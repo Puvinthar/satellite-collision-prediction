@@ -25,6 +25,20 @@ let raycaster, mouse;        // for click detection
 const EARTH_RADIUS = 1.0;  // normalized
 const SCALE_FACTOR = 1.0;  // trajectory data already normalized by R_EARTH in server
 
+// Toast notification
+function showToast(msg, type = 'success', duration = 4000) {
+    const existing = document.getElementById('epoch-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'epoch-toast';
+    const bg = type === 'success' ? 'rgba(34,197,94,0.9)' : type === 'error' ? 'rgba(239,68,68,0.9)' : 'rgba(59,130,246,0.9)';
+    toast.style.cssText = `position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;padding:12px 24px;border-radius:8px;background:${bg};color:#fff;font:bold 14px/1.4 'Inter',sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.5);pointer-events:auto;cursor:pointer;animation:slideDown 0.3s ease;max-width:600px;text-align:center;`;
+    toast.textContent = msg;
+    toast.onclick = () => toast.remove();
+    document.body.appendChild(toast);
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, duration);
+}
+
 // =========================================================================
 // INITIALIZATION
 // =========================================================================
@@ -142,23 +156,36 @@ async function init() {
 function buildFleetList() {
     const container = document.getElementById('fleet-list');
     if (!container) return;
+    
+    // Save currently checked IDs before rebuilding
+    const previouslyChecked = new Set(getSelectedIds());
+    
     container.innerHTML = '';
+    if (catalog.length === 0) {
+        container.innerHTML = '<div style="padding: 12px; color: #667788; text-align: center; font-size: 12px;">No objects loaded.<br>Use <b>Satellite Groups</b> or <b>Debris Events</b> above to load objects.</div>';
+        return;
+    }
     catalog.forEach(obj => {
         const tag = obj.type === 'PAYLOAD' ? 'SAT' : 'DEB';
         const tagCls = obj.type === 'PAYLOAD' ? 'tag-sat' : 'tag-deb';
-        const checked = defaultIds.includes(obj.id) ? 'checked' : '';
-        // Fallback: use name or ID if short is missing
+        const checked = previouslyChecked.has(obj.id) ? 'checked' : '';
         const displayName = obj.short || obj.name || obj.id || 'UNKNOWN';
         const displayId = obj.id || '?';
         container.innerHTML += `
             <label class="fleet-item" title="${obj.name || 'Unknown'} [${displayId}]">
-                <input type="checkbox" value="${obj.id}" ${checked} class="fleet-cb">
+                <input type="checkbox" id="chk-${obj.id}" value="${obj.id}" ${checked} class="fleet-cb">
                 <span class="obj-dot" style="background:${obj.color || '#ffffff'}"></span>
                 <span class="obj-label">${displayName}</span>
                 <span class="obj-id" style="font-size: 11px; color: #667788; margin-left: auto;">[${displayId}]</span>
                 <span class="obj-tag ${tagCls}">${tag}</span>
             </label>`;
     });
+    
+    // Update fleet count in header
+    const nSats = catalog.filter(o => o.type === 'PAYLOAD').length;
+    const nDeb = catalog.filter(o => o.type !== 'PAYLOAD').length;
+    const nChecked = getSelectedIds().length;
+    addLog('SYS', `Fleet: ${nSats} satellites + ${nDeb} debris = ${catalog.length} total (${nChecked} selected)`);
 }
 
 function getSelectedIds() {
@@ -167,8 +194,16 @@ function getSelectedIds() {
 
 // Expose to window for onclick handlers
 window.selectAll = () => { document.querySelectorAll('.fleet-cb').forEach(cb => cb.checked = true); };
-window.selectSats = () => { catalog.forEach((obj, i) => { document.querySelectorAll('.fleet-cb')[i].checked = obj.type === 'PAYLOAD'; }); };
-window.selectDebris = () => { catalog.forEach((obj, i) => { document.querySelectorAll('.fleet-cb')[i].checked = obj.type === 'DEBRIS'; }); };
+window.selectSats = () => {
+    const catMap = {};
+    catalog.forEach(o => catMap[o.id] = o.type);
+    document.querySelectorAll('.fleet-cb').forEach(cb => { cb.checked = catMap[cb.value] === 'PAYLOAD'; });
+};
+window.selectDebris = () => {
+    const catMap = {};
+    catalog.forEach(o => catMap[o.id] = o.type);
+    document.querySelectorAll('.fleet-cb').forEach(cb => { cb.checked = catMap[cb.value] !== 'PAYLOAD'; });
+};
 window.selectNone = () => { document.querySelectorAll('.fleet-cb').forEach(cb => cb.checked = false); };
 
 // =========================================================================
@@ -406,35 +441,57 @@ function createAtmosphere() {
     scene.add(atmosphereMesh);
 }
 
-function createDebrisCloud() {
-    // Create animated debris cloud around Earth showing LEO threat
+async function createDebrisCloud() {
+    // Create debris cloud from SGP4-propagated positions served by the backend
     while (debrisCloudGroup.children.length > 0) {
-        debrisCloudGroup.removeChild(debrisCloudGroup.children[0]);
+        const c = debrisCloudGroup.children[0];
+        debrisCloudGroup.remove(c);
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) c.material.dispose();
     }
-    const debrisCount = 800;
-    const debrisColors = [0xff5500, 0xff6600, 0xff7700, 0xff8800, 0xff3300, 0xff4400];
-    const minAltitude = 1.06;  // ~400 km
-    const maxAltitude = 1.31;  // ~2000 km
-    for (let i = 0; i < debrisCount; i++) {
-        const altitude = minAltitude + Math.random() * (maxAltitude - minAltitude);
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.random() * Math.PI;
-        const x = altitude * Math.sin(phi) * Math.cos(theta);
-        const y = altitude * Math.sin(phi) * Math.sin(theta);
-        const z = altitude * Math.cos(phi);
-        const size = 0.003 + Math.random() * 0.008;
-        const debrisGeo = new THREE.SphereGeometry(size, 4, 4);
-        const debrisColor = debrisColors[Math.floor(Math.random() * debrisColors.length)];
-        const debrisMat = new THREE.MeshPhongMaterial({
-            color: debrisColor, emissive: debrisColor, emissiveIntensity: 0.5,
-            transparent: true, opacity: 0.6
-        });
-        const debris = new THREE.Mesh(debrisGeo, debrisMat);
-        debris.position.set(x, y, z);
-        debris.userData = {orbitSpeed: 0.001 + Math.random() * 0.002, theta, phi, altitude};
-        debrisCloudGroup.add(debris);
+    
+    try {
+        const res = await fetch('/api/debris');
+        const debrisData = await res.json();
+        const debrisColors = [0xff5500, 0xff6600, 0xff7700, 0xff8800, 0xff3300, 0xff4400];
+        
+        // Visual cap to maintain 60fps (3000 max points)
+        const limit = Math.min(debrisData.length, 3000); 
+        
+        for (let i = 0; i < limit; i++) {
+            const sat = debrisData[i];
+            if (!sat.pos || sat.pos.length < 3) continue; 
+            
+            const size = 0.003 + Math.random() * 0.005;
+            const debrisGeo = new THREE.SphereGeometry(size, 4, 4);
+            const debrisColor = debrisColors[Math.floor(Math.random() * debrisColors.length)];
+            const debrisMat = new THREE.MeshPhongMaterial({
+                color: debrisColor, emissive: debrisColor, emissiveIntensity: 0.5,
+                transparent: true, opacity: 0.6
+            });
+            const debris = new THREE.Mesh(debrisGeo, debrisMat);
+            
+            // Position from SGP4-propagated ECI (already normalized by R_EARTH on server)
+            // Map ECI (x,y,z) -> Three.js (x, z, -y)
+            debris.position.set(sat.pos[0], sat.pos[2], -sat.pos[1]);
+            
+            // Store metadata for hover tooltips
+            debris.userData = {
+                isDebris: true,
+                name: sat.name || 'UNKNOWN',
+                norad: sat.id || '?',
+                group: (sat.group || '').replace('-debris', '').toUpperCase(),
+                alt: sat.alt || 0,
+                speed: sat.speed || 0,
+            };
+            
+            debrisCloudGroup.add(debris);
+        }
+        debrisCloudGroup.visible = true;
+        addLog('OK', `Debris cloud loaded: ${debrisCloudGroup.children.length} fragments`);
+    } catch (e) {
+        console.error("Failed to load realtime debris cloud", e);
     }
-    debrisCloudGroup.visible = true;
 }
 
 // =========================================================================
@@ -588,25 +645,109 @@ window.addCustomSatellite = async function() {
     }
 };
 
+window.addDebrisGroup = async function() {
+    const groupSelect = document.getElementById('debris-select');
+    const limitInput = document.getElementById('debris-limit');
+    if (!groupSelect || !limitInput) return;
+    
+    const group = groupSelect.value;
+    const limit = parseInt(limitInput.value) || 20;
+    
+    const btn = document.getElementById('btn-add-debris');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Loading...';
+    
+    try {
+        // Ensure debris data is fetched first  
+        await fetch('/api/debris');
+        
+        const res = await fetch('/api/add-debris-group', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ group, limit })
+        });
+        const data = await res.json();
+        if (data.success) {
+            addLog('OK', `Loaded ${data.count} fragments from ${group}`);
+            // Refresh catalog and fleet list
+            const resInfo = await fetch('/api/info');
+            catalog = (await resInfo.json()).catalog;
+            buildFleetList();
+            // Auto-select all loaded debris checkboxes
+            data.added.forEach(id => {
+                const cb = document.getElementById('chk-' + id);
+                if (cb) cb.checked = true;
+            });
+            addLog('CMD', `${data.count} debris fragments ready — select satellites and click RUN SCAN for conjunction analysis with trajectory paths.`);
+            showToast(`✅ ${data.count} debris fragments loaded from ${group.replace(/-/g, ' ').toUpperCase()}`, 'success');
+        } else {
+            addLog('ERR', data.error || 'Server error - check if backend is running.');
+        }
+    } catch (e) {
+        addLog('ERR', 'Debris load failed: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Load';
+        }
+    }
+};
+
+window.addSatGroup = async function() {
+    const groupSelect = document.getElementById('sat-group-select');
+    const limitInput = document.getElementById('sat-group-limit');
+    if (!groupSelect || !limitInput) return;
+    
+    const group = groupSelect.value;
+    const limit = parseInt(limitInput.value) || 10;
+    
+    const btn = document.getElementById('btn-add-sat-group');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Loading...';
+    
+    try {
+        const res = await fetch('/api/add-sat-group', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ group, limit })
+        });
+        const data = await res.json();
+        if (data.success) {
+            addLog('OK', `Loaded ${data.count} satellites from ${group}`);
+            const resInfo = await fetch('/api/info');
+            catalog = (await resInfo.json()).catalog;
+            buildFleetList();
+            // Auto-select loaded satellites
+            data.added.forEach(id => {
+                const cb = document.getElementById('chk-' + id);
+                if (cb) cb.checked = true;
+            });
+            addLog('CMD', `${data.count} satellites ready — load debris and click RUN SCAN for conjunction analysis.`);
+            showToast(`✅ ${data.count} satellites loaded from ${group.toUpperCase()}`, 'success');
+        } else {
+            addLog('ERR', data.error || 'Server error.');
+        }
+    } catch (e) {
+        addLog('ERR', 'Satellite group load failed: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Load';
+        }
+    }
+};
+
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
     if (earthMesh) earthMesh.rotation.y += 0.0002;
     
-    // Animate debris cloud
-    if (debrisCloudGroup) {
-        debrisCloudGroup.children.forEach(debris => {
-            if (debris.userData) {
-                debris.userData.theta += debris.userData.orbitSpeed;
-                const alt = debris.userData.altitude;
-                const theta = debris.userData.theta;
-                const phi = debris.userData.phi;
-                debris.position.x = alt * Math.sin(phi) * Math.cos(theta);
-                debris.position.z = alt * Math.sin(phi) * Math.sin(theta);
-                debris.position.y = alt * Math.cos(phi);
-            }
-        });
-    }
+    // Debris cloud is static (SGP4 snapshot), no per-frame animation needed
+    // Toggle visibility
+    const toggleDebrisEl = document.getElementById('toggle-debris');
+    if (debrisCloudGroup && toggleDebrisEl) debrisCloudGroup.visible = toggleDebrisEl.checked;
     
     const toggleSgp4 = document.getElementById('toggle-sgp4');
     if (sgp4Group && toggleSgp4) sgp4Group.visible = toggleSgp4.checked;
@@ -743,15 +884,38 @@ function updateTimelineLabel(frame) {
 // SATELLITE CLICK TRACKING
 // =========================================================================
 function onSatelliteClick(event) {
-    if (!satelliteGroup || satelliteGroup.children.length === 0) return;
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(satelliteGroup.children, false);
-    if (intersects.length > 0) {
-        const sat = intersects[0].object;
-        trackSatellite(sat);
+    
+    // Check satellites first
+    if (satelliteGroup && satelliteGroup.children.length > 0) {
+        const intersects = raycaster.intersectObjects(satelliteGroup.children, false);
+        if (intersects.length > 0) {
+            const sat = intersects[0].object;
+            trackSatellite(sat);
+            return;
+        }
+    }
+    
+    // Then check debris cloud
+    if (debrisCloudGroup && debrisCloudGroup.children.length > 0) {
+        const debrisIntersects = raycaster.intersectObjects(debrisCloudGroup.children, false);
+        if (debrisIntersects.length > 0) {
+            const deb = debrisIntersects[0].object;
+            const ud = deb.userData;
+            if (ud && ud.isDebris) {
+                addLog('DEB', `${ud.name} [NORAD ${ud.norad}] | ${ud.group} | ALT: ${ud.alt} km | SPD: ${ud.speed} km/s`);
+                // Highlight it briefly
+                deb.material.emissiveIntensity = 1.5;
+                deb.scale.set(3, 3, 3);
+                setTimeout(() => {
+                    deb.material.emissiveIntensity = 0.5;
+                    deb.scale.set(1, 1, 1);
+                }, 2000);
+            }
+        }
     }
 }
 

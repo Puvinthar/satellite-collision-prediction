@@ -47,6 +47,43 @@
             </div>
 
             <div class="section section-no-shrink">
+                <div class="section-header"><span class="section-icon">🛰️</span><span class="section-title">Satellite Groups</span></div>
+                <div class="section-body">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="number" id="sat-group-limit" value="10" min="1" max="50" style="width: 50px; padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff;" title="Limit items">
+                        <select id="sat-group-select" style="flex: 1; padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+                            <option value="stations">Stations (ISS, CSS...)</option>
+                            <option value="active">Active Satellites</option>
+                            <option value="starlink">Starlink</option>
+                            <option value="oneweb">OneWeb</option>
+                            <option value="planet">Planet</option>
+                            <option value="spire">Spire</option>
+                            <option value="geo">Geostationary</option>
+                            <option value="weather">Weather</option>
+                            <option value="science">Science</option>
+                        </select>
+                        <button class="btn-secondary" onclick="addSatGroup()" id="btn-add-sat-group">Load</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section section-no-shrink">
+                <div class="section-header"><span class="section-icon">💥</span><span class="section-title">Debris Events</span></div>
+                <div class="section-body">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="number" id="debris-limit" value="20" min="5" max="100" style="width: 50px; padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff;" title="Limit items">
+                        <select id="debris-select" style="flex: 1; padding: 4px; border-radius: 4px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff;">
+                            <option value="cosmos-2251-debris">Cosmos 2251</option>
+                            <option value="iridium-33-debris">Iridium 33</option>
+                            <option value="fengyun-1c-debris">Fengyun 1C</option>
+                            <option value="cosmos-1408-debris">Cosmos 1408</option>
+                        </select>
+                        <button class="btn-secondary" onclick="addDebrisGroup()" id="btn-add-debris">Load</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section section-no-shrink">
                 <div class="section-header"><span class="section-icon">📡</span><span class="section-title">Live TLE Data</span></div>
                 <div class="section-body">
                     <button class="btn-secondary" onclick="fetchTLEs()" id="btn-fetch">⬆ Fetch Live TLEs</button>

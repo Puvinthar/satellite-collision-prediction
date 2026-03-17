@@ -32,6 +32,7 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "pybind11==3.0.2",
     "pybind11-stubgen==2.5.5",
+    "aiohttp>=3.13.3",
 ]
 
 [[tool.uv.index]]

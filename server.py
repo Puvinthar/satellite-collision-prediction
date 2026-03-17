@@ -44,7 +44,7 @@ except Exception as e:
 
 
 try:
-    from src.tle_fetcher import fetch_tle
+    from src.tle_fetcher import fetch_tle, fetch_batch
 
     TLE_FETCHER_AVAILABLE = True
 except Exception:
@@ -54,128 +54,11 @@ except Exception:
 # SATELLITE DATABASE & CACHE
 # =========================================================================
 TLE_CACHE = {}  # Volatile cache for live TLEs
-SAT_DATABASE = {
-    "25544": {
-        "name": "ISS (ZARYA)",
-        "short": "ISS",
-        "norad": "25544",
-        "type": "PAYLOAD",
-        "country": "ISS",
-        "tle1": None,
-        "tle2": None,
-    },
-    "48274": {
-        "name": "CSS (TIANHE)",
-        "short": "CSS",
-        "norad": "48274",
-        "type": "PAYLOAD",
-        "country": "PRC",
-        "tle1": None,
-        "tle2": None,
-    },
-    "46984": {
-        "name": "SENTINEL-6A",
-        "short": "SENT-6A",
-        "norad": "46984",
-        "type": "PAYLOAD",
-        "country": "EU",
-        "tle1": None,
-        "tle2": None,
-    },
-    "20580": {
-        "name": "HUBBLE SPACE TELESCOPE",
-        "short": "HST",
-        "norad": "20580",
-        "type": "PAYLOAD",
-        "country": "USA",
-        "tle1": None,
-        "tle2": None,
-    },
-    "25982": {
-        "name": "SPOT-4",
-        "short": "SPOT-4",
-        "norad": "25982",
-        "type": "PAYLOAD",
-        "country": "FRA",
-        "tle1": None,
-        "tle2": None,
-    },
-    "39446": {
-        "name": "JASON-2",
-        "short": "JASON2",
-        "norad": "39446",
-        "type": "PAYLOAD",
-        "country": "USA",
-        "tle1": None,
-        "tle2": None,
-    },
-    "41335": {
-        "name": "CRYOSAT-2",
-        "short": "CRYO-2",
-        "norad": "41335",
-        "type": "PAYLOAD",
-        "country": "EU",
-        "tle1": None,
-        "tle2": None,
-    },
-    "39084": {
-        "name": "ENVISAT",
-        "short": "ENVI",
-        "norad": "39084",
-        "type": "PAYLOAD",
-        "country": "EU",
-        "tle1": None,
-        "tle2": None,
-    },
-    "28654": {
-        "name": "NOAA 18",
-        "short": "NOAA18",
-        "norad": "28654",
-        "type": "PAYLOAD",
-        "country": "USA",
-        "tle1": None,
-        "tle2": None,
-    },
-    "49271": {
-        "name": "FREGAT DEB",
-        "short": "FRG-DEB",
-        "norad": "49271",
-        "type": "DEBRIS",
-        "country": "CIS",
-        "tle1": None,
-        "tle2": None,
-    },
-    "22285": {
-        "name": "SL-16 R/B",
-        "short": "SL16-RB",
-        "norad": "22285",
-        "type": "DEBRIS",
-        "country": "CIS",
-        "tle1": None,
-        "tle2": None,
-    },
-    "54600": {
-        "name": "CZ-6A DEB",
-        "short": "CZ6-DEB",
-        "norad": "54600",
-        "type": "DEBRIS",
-        "country": "PRC",
-        "tle1": None,
-        "tle2": None,
-    },
-}
+SAT_DATABASE = {}  # Populated dynamically via /api/add-sat-group and /api/add-debris-group
 
 SAT_PALETTE = ["#60a5fa", "#818cf8", "#34d399", "#a78bfa", "#93c5fd", "#6ee7b7"]
 DEB_PALETTE = ["#fb923c", "#f472b6", "#f87171", "#fbbf24", "#fb7185", "#fde047"]
-OBJECT_COLORS = {}
-_si, _di = 0, 0
-for _nid, _info in SAT_DATABASE.items():
-    if _info["type"] == "PAYLOAD":
-        OBJECT_COLORS[_nid] = SAT_PALETTE[_si % len(SAT_PALETTE)]
-        _si += 1
-    else:
-        OBJECT_COLORS[_nid] = DEB_PALETTE[_di % len(DEB_PALETTE)]
-        _di += 1
+OBJECT_COLORS = {}  # Populated dynamically when groups are loaded
 
 R_EARTH = 6371
 
@@ -217,7 +100,7 @@ def get_info():
                 }
                 for k, v in SAT_DATABASE.items()
             ],
-            "defaults": ["25544", "48274", "20580", "46984", "49271", "22285"],
+            "defaults": [],  # No hardcoded defaults — load via group selectors
             "model_loaded": MODEL_LOADED,
             "model_metadata": {
                 "version": "GatedPINN v3.1.2",
@@ -433,70 +316,90 @@ def api_scan():
             {"error": "Less than 2 objects propagated.", "details": errors}
         ), 400
 
-    # Build collision pairs
+    # Build collision pairs — only SAT↔DEB and SAT↔SAT, skip DEB↔DEB
     ids = list(objects.keys())
     n = len(ids)
     pairs = []
 
-    # Calculate step size in minutes (estimated from prop_window and trajectory points)
-    # get_trajectory auto-computes from orbital period; estimate step from prop_window as fallback
+    # Split into active satellites vs debris
+    sat_ids = [oid for oid in ids if objects[oid]["type"] in ("PAYLOAD", "STATION")]
+    deb_ids = [oid for oid in ids if objects[oid]["type"] not in ("PAYLOAD", "STATION")]
+
+    # Pre-compute numpy trajectory arrays once (avoid repeated conversions)
+    traj_arrays = {}
+    for oid in ids:
+        traj_arrays[oid] = np.array(objects[oid]["trajectory_pinn_eci"]) * R_EARTH
+
+    # Calculate step size in minutes
     first_traj = next(iter(objects.values()), {}).get("trajectory_pinn_eci", [])
     n_traj_points = len(first_traj) if first_traj else 600
     step_minutes = prop_window / n_traj_points
-    logger.info(f"Computing collision pairs for {n} objects ({n * (n - 1) // 2} pairs)")
 
-    for i in range(n):
-        for j in range(i + 1, n):
-            try:
-                # Use the ECI PINN trajectories for distance calculation (in km!)
-                # Denormalize from display coordinates back to km
-                traj_a_eci = (
-                    np.array(objects[ids[i]]["trajectory_pinn_eci"]) * R_EARTH
-                )  # back to km
-                traj_b_eci = (
-                    np.array(objects[ids[j]]["trajectory_pinn_eci"]) * R_EARTH
-                )  # back to km
+    def compute_pair(id_a, id_b):
+        """Compute miss distance between two objects."""
+        dists = np.linalg.norm(traj_arrays[id_a] - traj_arrays[id_b], axis=1)
+        min_idx = np.argmin(dists)
+        dist = float(dists[min_idx])
+        tca_offset = min_idx * step_minutes
+        tca_dt = target_dt + timedelta(minutes=tca_offset)
+        tca_str = tca_dt.strftime("%Y-%m-%d %H:%M:%S") + f" (+{int(tca_offset):d}m)"
 
-                # Calculate distance across all 200 frames
-                dists = np.linalg.norm(traj_a_eci - traj_b_eci, axis=1)
-                min_idx = np.argmin(dists)
-                dist = float(dists[min_idx])
+        threat = "LOW"
+        if dist < 100:
+            threat = "CRITICAL"
+        elif dist < 500:
+            threat = "HIGH"
+        elif dist < 2000:
+            threat = "WARNING"
 
-                # Predict TCA Time
-                tca_offset = min_idx * step_minutes
-                tca_dt = target_dt + timedelta(minutes=tca_offset)
-                tca_str = (
-                    tca_dt.strftime("%Y-%m-%d %H:%M:%S") + f" (+{int(tca_offset):d}m)"
-                )
+        return {
+            "a": id_a,
+            "b": id_b,
+            "name_a": objects[id_a]["short"],
+            "name_b": objects[id_b]["short"],
+            "miss_dist": round(dist, 1),
+            "threat": threat,
+            "tca": tca_str,
+            "min_idx": int(min_idx),
+        }
 
-                threat = "LOW"
-                if dist < 100:
-                    threat = "CRITICAL"
-                elif dist < 500:
-                    threat = "HIGH"
-                elif dist < 2000:
-                    threat = "WARNING"
-
-                pairs.append(
-                    {
-                        "a": ids[i],
-                        "b": ids[j],
-                        "name_a": objects[ids[i]]["short"],
-                        "name_b": objects[ids[j]]["short"],
-                        "miss_dist": round(dist, 1),
-                        "threat": threat,
-                        "tca": tca_str,
-                        "min_idx": int(min_idx),
-                    }
-                )
-                logger.debug(
-                    f"  {objects[ids[i]]['name']} <-> {objects[ids[j]]['name']}: {dist:.1f} km ({threat})"
-                )
-
-            except Exception as ex:
-                logger.error(
-                    f"Error computing collision pair {ids[i]}-{ids[j]}: {str(ex)[:80]}"
-                )
+    # If both types present: SAT↔SAT + SAT↔DEB only (skip DEB↔DEB)
+    # If only one type: compute all pairs
+    if len(sat_ids) > 0 and len(deb_ids) > 0:
+        n_sat_pairs = len(sat_ids) * (len(sat_ids) - 1) // 2
+        n_cross_pairs = len(sat_ids) * len(deb_ids)
+        logger.info(
+            f"Computing collision pairs: {len(sat_ids)} sats, {len(deb_ids)} debris → "
+            f"{n_sat_pairs} SAT↔SAT + {n_cross_pairs} SAT↔DEB = {n_sat_pairs + n_cross_pairs} pairs "
+            f"(skipped {len(deb_ids) * (len(deb_ids) - 1) // 2} DEB↔DEB)"
+        )
+        # SAT ↔ SAT pairs
+        for i in range(len(sat_ids)):
+            for j in range(i + 1, len(sat_ids)):
+                try:
+                    pairs.append(compute_pair(sat_ids[i], sat_ids[j]))
+                except Exception as ex:
+                    logger.error(
+                        f"Pair error {sat_ids[i]}-{sat_ids[j]}: {str(ex)[:80]}"
+                    )
+        # SAT ↔ DEB pairs
+        for sid in sat_ids:
+            for did in deb_ids:
+                try:
+                    pairs.append(compute_pair(sid, did))
+                except Exception as ex:
+                    logger.error(f"Pair error {sid}-{did}: {str(ex)[:80]}")
+    else:
+        # Fallback: only one type selected, compute all pairs
+        logger.info(
+            f"Computing ALL pairs (single type): {n} objects → {n * (n - 1) // 2} pairs"
+        )
+        for i in range(n):
+            for j in range(i + 1, n):
+                try:
+                    pairs.append(compute_pair(ids[i], ids[j]))
+                except Exception as ex:
+                    logger.error(f"Pair error {ids[i]}-{ids[j]}: {str(ex)[:80]}")
 
     pairs.sort(key=lambda p: p["miss_dist"])
 
@@ -546,25 +449,20 @@ def api_fetch_tles():
     logger.info(f"Fetching TLEs for {len(ids_to_fetch)} satellites")
 
     n_ok, n_fail = 0, 0
-    for nid in ids_to_fetch:
-        try:
-            result = fetch_tle(nid)
-            if result:
-                # Update SAT_DATABASE for existing ones
-                if str(nid) in SAT_DATABASE:
-                    SAT_DATABASE[str(nid)]["tle1"] = result["tle1"]
-                    SAT_DATABASE[str(nid)]["tle2"] = result["tle2"]
-                    logger.info(
-                        f"✓ Updated {SAT_DATABASE[str(nid)]['name']} from CelesTrak"
-                    )
-                # Always store in cache for immediate use
-                TLE_CACHE[str(nid)] = result
-                n_ok += 1
-            else:
-                logger.warning(f"✗ Failed to fetch NORAD {nid}")
-                n_fail += 1
-        except Exception as ex:
-            logger.error(f"Exception fetching NORAD {nid}: {str(ex)}")
+    results = fetch_batch(ids_to_fetch)
+
+    for nid, result in results.items():
+        if result:
+            # Update SAT_DATABASE for existing ones
+            if nid in SAT_DATABASE:
+                SAT_DATABASE[nid]["tle1"] = result["tle1"]
+                SAT_DATABASE[nid]["tle2"] = result["tle2"]
+                logger.debug(f"✓ Updated {SAT_DATABASE[nid]['name']} cache")
+            # Always store in global live cache
+            TLE_CACHE[nid] = result
+            n_ok += 1
+        else:
+            logger.warning(f"✗ Failed to fetch NORAD {nid}")
             n_fail += 1
 
     logger.info(f"TLE fetch complete: {n_ok} OK, {n_fail} failed")
@@ -616,9 +514,239 @@ def add_sat():
     )
 
 
+DEBRIS_GROUPS = [
+    "cosmos-2251-debris",
+    "iridium-33-debris",
+    "fengyun-1c-debris",
+    "cosmos-1408-debris",
+]
+_debris_cache = {"data": None, "fetched_at": 0}
+
+
+@app.route("/api/debris", methods=["GET"])
+def get_debris():
+    """Fetch realtime collision debris from Celestrak with SGP4-propagated positions."""
+    global _debris_cache
+    import time
+    import requests
+    import numpy as np
+    from sgp4.api import Satrec, jday
+
+    if _debris_cache["data"] and (time.time() - _debris_cache["fetched_at"] < 3600):
+        return jsonify(_debris_cache["data"])
+
+    all_debris = []
+    logger.info("Fetching fresh debris data from CelesTrak...")
+
+    # Current time for SGP4 propagation
+    now = datetime.now(timezone.utc)
+    jd, fr = jday(
+        now.year,
+        now.month,
+        now.day,
+        now.hour,
+        now.minute,
+        now.second + now.microsecond / 1e6,
+    )
+
+    for group in DEBRIS_GROUPS:
+        try:
+            resp = requests.get(
+                f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle",
+                timeout=15,
+            )
+            if resp.status_code == 200:
+                text = resp.text.strip()
+                lines = [L.strip() for L in text.splitlines() if L.strip()]
+
+                for i in range(0, len(lines), 3):
+                    if i + 2 >= len(lines):
+                        break
+
+                    name = lines[i]
+                    tle1 = lines[i + 1]
+                    tle2 = lines[i + 2]
+
+                    try:
+                        satrec = Satrec.twoline2rv(tle1, tle2)
+                        mm = satrec.no_kozai * 1440.0 / (2 * np.pi)
+
+                        if mm <= 0:
+                            continue
+
+                        # Propagate to current time
+                        e_err, r, v = satrec.sgp4(jd, fr)
+                        if e_err != 0 or r[0] is None:
+                            continue
+
+                        r_km = np.array(r)
+                        alt_km = float(np.linalg.norm(r_km) - R_EARTH)
+                        speed = float(np.linalg.norm(v))
+
+                        # Normalize for Three.js (divide by R_EARTH)
+                        r_norm = (r_km / R_EARTH).tolist()
+
+                        all_debris.append(
+                            {
+                                "id": tle1[2:7].strip(),
+                                "name": name,
+                                "group": group,
+                                "pos": r_norm,
+                                "alt": round(alt_km, 1),
+                                "speed": round(speed, 3),
+                                "mm": round(float(mm), 4),
+                                "tle1": tle1,
+                                "tle2": tle2,
+                            }
+                        )
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"Failed to fetch debris group {group}: {e}")
+
+    if all_debris:
+        _debris_cache["data"] = all_debris
+        _debris_cache["fetched_at"] = time.time()
+        logger.info(f"Loaded {len(all_debris)} debris points into cache.")
+
+    return jsonify(_debris_cache.get("data", []))
+
+
+@app.route("/api/add-debris-group", methods=["POST"])
+def add_debris_group():
+    """Load a selection of objects from a debris group into the live tracking fleet."""
+    group = request.json.get("group")
+    limit = int(request.json.get("limit", 50))
+
+    if not _debris_cache["data"]:
+        return jsonify({"error": "Debris not loaded yet."}), 400
+
+    count = 0
+    added = []
+
+    for sat in _debris_cache["data"]:
+        if sat.get("group") == group:
+            if count >= limit:
+                break
+
+            sat_id = sat["id"]
+            # Assign a color from the debris palette
+            color = DEB_PALETTE[count % len(DEB_PALETTE)]
+            OBJECT_COLORS[sat_id] = color
+
+            SAT_DATABASE[sat_id] = {
+                "name": sat["name"],
+                "short": sat["name"][:10],
+                "norad": sat_id,
+                "type": "DEBRIS",
+                "country": "UNK",
+                "tle1": sat["tle1"],
+                "tle2": sat["tle2"],
+            }
+            # Cache for immediate scanning
+            TLE_CACHE[sat_id] = {
+                "name": sat["name"],
+                "tle1": sat["tle1"],
+                "tle2": sat["tle2"],
+            }
+
+            added.append(sat_id)
+            count += 1
+
+    if count == 0:
+        return jsonify({"error": f"No debris found for group {group}"}), 404
+
+    logger.info(f"Loaded {count} debris from {group} into tracking fleet.")
+    return jsonify({"success": True, "count": count, "added": added})
+
+
+SAT_GROUPS = {
+    "stations": "Space Stations",
+    "active": "Active Satellites",
+    "starlink": "Starlink",
+    "oneweb": "OneWeb",
+    "planet": "Planet",
+    "spire": "Spire",
+    "geo": "Geostationary",
+    "weather": "Weather",
+    "science": "Science",
+}
+
+
+@app.route("/api/add-sat-group", methods=["POST"])
+def add_sat_group():
+    """Load satellites from a CelesTrak group into the live tracking fleet."""
+    import requests
+    from sgp4.api import Satrec
+
+    group = request.json.get("group")
+    limit = int(request.json.get("limit", 20))
+
+    if group not in SAT_GROUPS:
+        return jsonify({"error": f"Unknown group: {group}"}), 400
+
+    try:
+        resp = requests.get(
+            f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle",
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": f"CelesTrak returned {resp.status_code}"}), 502
+
+        text = resp.text.strip()
+        lines = [L.strip() for L in text.splitlines() if L.strip()]
+
+        count = 0
+        added = []
+
+        for i in range(0, len(lines), 3):
+            if i + 2 >= len(lines) or count >= limit:
+                break
+
+            name = lines[i]
+            tle1 = lines[i + 1]
+            tle2 = lines[i + 2]
+
+            if not tle1.startswith("1 ") or not tle2.startswith("2 "):
+                continue
+
+            try:
+                Satrec.twoline2rv(tle1, tle2)  # validate
+            except Exception:
+                continue
+
+            sat_id = tle1[2:7].strip()
+            color = SAT_PALETTE[count % len(SAT_PALETTE)]
+            OBJECT_COLORS[sat_id] = color
+
+            SAT_DATABASE[sat_id] = {
+                "name": name,
+                "short": name[:12],
+                "norad": sat_id,
+                "type": "PAYLOAD",
+                "country": "INTL",
+                "tle1": tle1,
+                "tle2": tle2,
+            }
+            TLE_CACHE[sat_id] = {"name": name, "tle1": tle1, "tle2": tle2}
+
+            added.append(sat_id)
+            count += 1
+
+        if count == 0:
+            return jsonify({"error": f"No satellites found in group {group}"}), 404
+
+        logger.info(f"Loaded {count} satellites from {group} into tracking fleet.")
+        return jsonify({"success": True, "count": count, "added": added})
+
+    except Exception as e:
+        logger.error(f"Failed to fetch satellite group {group}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     print(f"\n{'=' * 60}")
     print("  EPOCH ZERO — Fleet Surveillance System (Three.js UI)")
-    print("  Open http://localhost:3000")
+    print("  Open http://localhost:5000")
     print(f"{'=' * 60}\n")
     app.run(debug=True, port=5000, host="0.0.0.0", use_reloader=True)

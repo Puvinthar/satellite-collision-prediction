@@ -6,6 +6,8 @@ SGP4 pipeline can predict *future* positions from *today's* data.
 """
 
 import requests
+import aiohttp
+import asyncio
 import time
 import logging
 import os
@@ -28,39 +30,102 @@ _tle_cache: dict = {}
 CACHE_TTL_SECONDS = 3600  # re-fetch if older than 1 hour
 
 
-def fetch_tle(norad_id: str | int, timeout: float = 15.0, max_retries: int = 2) -> Optional[dict]:
+async def fetch_tle_async(norad_id: str | int, session: aiohttp.ClientSession, timeout: float = 15.0, max_retries: int = 2) -> Optional[dict]:
     """
-    Fetch the latest TLE for a single NORAD catalog ID from CelesTrak.
-
-    Parameters
-    ----------
-    norad_id : str or int
-        NORAD catalog ID
-    timeout : float
-        Request timeout in seconds (default: 15.0)
-    max_retries : int
-        Number of retry attempts on failure (default: 2)
-
-    Returns
-    -------
-    dict
-        {"tle1": str, "tle2": str, "name": str, "epoch_str": str}
-        or None on failure.
+    Asynchronously fetch the latest TLE for a single NORAD catalog ID from CelesTrak.
     """
     norad_id = str(norad_id).strip()
 
     # Check cache
     cached = _tle_cache.get(norad_id)
     if cached and (time.time() - cached["fetched_at"]) < CACHE_TTL_SECONDS:
-        logger.debug(f"[TLE] Cache HIT for NORAD {norad_id} (age: {time.time() - cached['fetched_at']:.1f}s)")
+        logger.debug(f"[TLE-Async] Cache HIT for NORAD {norad_id}")
         return cached
-    
-    if cached:
-        logger.debug(f"[TLE] Cache STALE for NORAD {norad_id} (age: {time.time() - cached['fetched_at']:.1f}s, TTL: {CACHE_TTL_SECONDS}s)")
 
     for attempt in range(max_retries + 1):
         try:
-            logger.debug(f"[TLE] Fetching NORAD {norad_id} (attempt {attempt + 1}/{max_retries + 1})")
+            logger.debug(f"[TLE-Async] Fetching NORAD {norad_id} (attempt {attempt + 1})")
+            async with session.get(
+                CELESTRAK_GP_URL,
+                params={"CATNR": norad_id, "FORMAT": "TLE"},
+                timeout=timeout,
+            ) as resp:
+                resp.raise_for_status()
+                text = await resp.text()
+                text = text.strip()
+
+                if not text or "No GP data found" in text or "Invalid" in text:
+                    logger.warning(f"[TLE-Async] No data for NORAD {norad_id}")
+                    return None
+
+                lines = [line.strip() for line in text.splitlines() if line.strip()]
+                if len(lines) < 2:
+                    if attempt < max_retries:
+                        await asyncio.sleep(0.5 * (2 ** attempt))
+                        continue
+                    break
+
+                if len(lines) >= 3 and not lines[0].startswith("1 "):
+                    name, tle1, tle2 = lines[0], lines[1], lines[2]
+                else:
+                    name, tle1, tle2 = f"NORAD-{norad_id}", lines[0], lines[1]
+
+                if not tle1.startswith("1 ") or not tle2.startswith("2 "):
+                    if attempt < max_retries:
+                        await asyncio.sleep(0.5 * (2 ** attempt))
+                        continue
+                    break
+
+                epoch_str = _tle_epoch_to_utc(tle1)
+                result = {
+                    "tle1": tle1,
+                    "tle2": tle2,
+                    "name": name,
+                    "epoch_str": epoch_str,
+                    "fetched_at": time.time(),
+                }
+                _tle_cache[norad_id] = result
+                logger.info(f"[TLE-Async] Successfully fetched NORAD {norad_id}: {name}")
+                return result
+
+        except Exception as e:
+            logger.warning(f"[TLE-Async] Error fetching NORAD {norad_id} (attempt {attempt + 1}): {e}")
+            if attempt < max_retries:
+                await asyncio.sleep(0.5 * (2 ** attempt))
+                continue
+            break
+
+    # Fallback to sync SpaceTrack if async CelesTrak fails
+    return fetch_tle_spacetrack(norad_id)
+
+
+async def fetch_batch_async(norad_ids: list[str | int], timeout: float = 15.0) -> dict:
+    """
+    Fetch TLEs for multiple NORAD IDs asynchronously in parallel.
+    """
+    results = {}
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_tle_async(nid, session, timeout=timeout) for nid in norad_ids]
+        responses = await asyncio.gather(*tasks)
+        for nid, resp in zip(norad_ids, responses):
+            results[str(nid)] = resp
+    return results
+
+
+def fetch_tle(norad_id: str | int, timeout: float = 15.0, max_retries: int = 2) -> Optional[dict]:
+    """
+    Synchronous wrapper for fetch_tle_async (using a temporary event loop if needed, 
+    but for now just keeping the original sync logic for compatibility).
+    """
+    norad_id = str(norad_id).strip()
+
+    # Check cache
+    cached = _tle_cache.get(norad_id)
+    if cached and (time.time() - cached["fetched_at"]) < CACHE_TTL_SECONDS:
+        return cached
+
+    for attempt in range(max_retries + 1):
+        try:
             resp = requests.get(
                 CELESTRAK_GP_URL,
                 params={"CATNR": norad_id, "FORMAT": "TLE"},
@@ -70,38 +135,24 @@ def fetch_tle(norad_id: str | int, timeout: float = 15.0, max_retries: int = 2) 
             text = resp.text.strip()
 
             if not text or "No GP data found" in text or "Invalid" in text:
-                logger.warning(f"[TLE] No data for NORAD {norad_id} from CelesTrak")
                 return None
 
-            lines = [l.strip() for l in text.splitlines() if l.strip()]
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
             if len(lines) < 2:
-                logger.warning(f"[TLE] Incomplete response for NORAD {norad_id} (only {len(lines)} lines)")
-                if attempt < max_retries:
-                    time.sleep(0.5 * (2 ** attempt))  # Exponential backoff
-                    continue
-                break
-
-            # CelesTrak returns: Name (line 0), TLE Line 1, TLE Line 2
-            if len(lines) >= 3 and not lines[0].startswith("1 "):
-                name = lines[0]
-                tle1 = lines[1]
-                tle2 = lines[2]
-            else:
-                name = f"NORAD-{norad_id}"
-                tle1 = lines[0]
-                tle2 = lines[1]
-
-            # Validate basic TLE format
-            if not tle1.startswith("1 ") or not tle2.startswith("2 "):
-                logger.warning(f"[TLE] Invalid TLE format for NORAD {norad_id}")
                 if attempt < max_retries:
                     time.sleep(0.5 * (2 ** attempt))
                     continue
                 break
 
-            # Extract epoch from TLE line 1  (cols 18-32: YYDDD.DDDDDDDD)
-            epoch_str = _tle_epoch_to_utc(tle1)
+            if len(lines) >= 3 and not lines[0].startswith("1 "):
+                name, tle1, tle2 = lines[0], lines[1], lines[2]
+            else:
+                name, tle1, tle2 = f"NORAD-{norad_id}", lines[0], lines[1]
 
+            if not tle1.startswith("1 ") or not tle2.startswith("2 "):
+                continue
+
+            epoch_str = _tle_epoch_to_utc(tle1)
             result = {
                 "tle1": tle1,
                 "tle2": tle2,
@@ -110,44 +161,43 @@ def fetch_tle(norad_id: str | int, timeout: float = 15.0, max_retries: int = 2) 
                 "fetched_at": time.time(),
             }
             _tle_cache[norad_id] = result
-            logger.info(f"[TLE] Successfully fetched NORAD {norad_id}: {name} (epoch: {epoch_str})")
             return result
-
-        except requests.Timeout:
-            logger.warning(f"[TLE] Timeout fetching NORAD {norad_id} (attempt {attempt + 1}/{max_retries + 1})")
+        except Exception:
             if attempt < max_retries:
                 time.sleep(0.5 * (2 ** attempt))
                 continue
             break
-        except requests.ConnectionError as e:
-            logger.warning(f"[TLE] Connection error for NORAD {norad_id}: {e} (attempt {attempt + 1}/{max_retries + 1})")
-            if attempt < max_retries:
-                time.sleep(0.5 * (2 ** attempt))
-                continue
-            break
-        except requests.RequestException as e:
-            logger.error(f"[TLE] Request error for NORAD {norad_id}: {e}")
-            break
 
-    # If we reached here, CelesTrak failed. Try fallback.
-    logger.warning(f"[TLE] CelesTrak failed for NORAD {norad_id}. Attempting SpaceTrack fallback...")
-    fallback_res = fetch_tle_spacetrack(norad_id)
-    if fallback_res:
-        _tle_cache[norad_id] = fallback_res
-        return fallback_res
-        
-    return None
+    return fetch_tle_spacetrack(norad_id)
 
 
 def fetch_batch(norad_ids: list[str | int], timeout: float = 15.0) -> dict:
     """
-    Fetch TLEs for multiple NORAD IDs. Returns {norad_id: tle_dict or None}.
+    Synchronous batch fetcher (now uses asyncio.run for speed).
     """
-    results = {}
-    for nid in norad_ids:
-        results[str(nid)] = fetch_tle(nid, timeout=timeout)
-    return results
-
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+            
+        if loop and loop.is_running():
+            # In a running loop (e.g. async flask view or test), we can't use asyncio.run
+            # We must use a separate thread or just warn and fall back
+            # For this simple app, we'll fall back to sync in a running loop or use a trick
+            logger.debug("[TLE-Batch] Event loop already running. Falling back to sync loop.")
+            results = {}
+            for nid in norad_ids:
+                results[str(nid)] = fetch_tle(nid, timeout=timeout)
+            return results
+        else:
+            return asyncio.run(fetch_batch_async(norad_ids, timeout))
+    except Exception as e:
+        logger.error(f"[TLE-Batch] Async batch failed: {e}. Using sync loop.")
+        results = {}
+        for nid in norad_ids:
+            results[str(nid)] = fetch_tle(nid, timeout=timeout)
+        return results
 
 def _tle_epoch_to_utc(tle1: str) -> str:
     """Convert TLE epoch field (YYDDD.DDDDDDDD) to 'YYYY-MM-DD HH:MM:SS' string."""
